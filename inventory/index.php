@@ -4,6 +4,45 @@ session_start();
 include "../config/config.php";
 include "../config/session_check.php";
 
+// Get the current page from the URL, defaulting to 1 if not set
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 10; // Number of rows per page
+$offset = ($page - 1) * $limit;
+
+$total_qry = "SELECT COUNT(*) as total FROM products";
+$total_res = mysqli_query($connect, $total_qry);
+$total_row = mysqli_fetch_assoc($total_res);
+$total_products = $total_row['total'];
+$total_pages = ceil($total_products / $limit);
+
+$select_qry = "SELECT 
+                p.id AS product_id, 
+                p.product_name, 
+                p.category, 
+                p.quantity_packet AS product_stock,
+                p.price_per_sachet,
+                p.price_per_packet,
+                p.low_stock_alert,
+                p.created_at, 
+                v.id AS variant_id, 
+                v.variant_name, 
+                v.quantity_packet AS variant_stock
+            FROM products p
+            LEFT JOIN product_variants v ON p.id = v.product_id
+            ORDER BY p.id, v.id
+            LIMIT $offset, $limit";
+
+$row = mysqli_query($connect, $select_qry);
+if (mysqli_num_rows($row) > 0) {
+    while ($rows = mysqli_fetch_assoc($row)) {
+        /* echo '<pre>';
+        print_r($rows);
+        echo '</pre>'; */
+        $trow = $row;
+    }
+    // die();
+}
+
 if (isset($_POST['addCat'])) {
     $category  = isset($_POST['category']) ? trim($_POST['category']) : '';
     $desc      = isset($_POST['cat_desc']) ? trim($_POST['cat_desc']) : '';
@@ -43,7 +82,7 @@ $res = mysqli_query($connect, $sel_qry);
 
 if (mysqli_num_rows($res) > 0) {
     while ($row = mysqli_fetch_assoc($res)) {
-        $cat[] = $row;   
+        $cat[] = $row;
     }
 }
 ?>
@@ -94,6 +133,69 @@ if (mysqli_num_rows($res) > 0) {
 
         .closebtn:hover {
             color: black;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin: 1.5rem 0 2rem 0;
+            padding: 0;
+            gap: 0.25rem;
+        }
+
+        .pagination a,
+        .pagination span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.5rem;
+            height: 2.5rem;
+            padding: 0.5rem 0.75rem;
+            margin: 0 0.1rem;
+            text-decoration: none;
+            border-radius: 0.25rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .pagination a {
+            background-color: #f8f9fa;
+            color: #495057;
+            border: 1px solid #dee2e6;
+        }
+
+        .pagination a:hover {
+            background-color: #e9ecef;
+            color: #0d6efd;
+            border-color: #0d6efd;
+            z-index: 1;
+        }
+
+        .pagination span {
+            background-color: #0d6efd;
+            color: white;
+            border: 1px solid #0d6efd;
+        }
+
+        /* For previous and next buttons */
+        .pagination a.prev,
+        .pagination a.next {
+            padding: 0.5rem 1rem;
+        }
+
+        /* For mobile responsiveness */
+        @media (max-width: 576px) {
+            .pagination {
+                flex-wrap: wrap;
+            }
+
+            .pagination a,
+            .pagination span {
+                min-width: 2rem;
+                height: 2rem;
+                padding: 0.25rem 0.5rem;
+                margin-bottom: 0.5rem;
+            }
         }
     </style>
 </head>
@@ -228,9 +330,9 @@ if (mysqli_num_rows($res) > 0) {
                         <select class="form-select" id="categoryFilter">
                             <option value="">All Categories</option>
                             <?php
-                                foreach ($cat as $row) {
-                                    echo "<option value='{$row["category"]}'>{$row["category"]}</option>";
-                                }
+                            foreach ($cat as $row) {
+                                echo "<option value='{$row["category"]}'>{$row["category"]}</option>";
+                            }
                             ?>
                         </select>
                     </div>
@@ -256,10 +358,12 @@ if (mysqli_num_rows($res) > 0) {
                     <table class="table">
                         <thead>
                             <tr>
+                                <th width="40"></th>
                                 <th>Product Name</th>
                                 <th>Category</th>
                                 <th>Stock</th>
-                                <th>Price</th>
+                                <th>Unit Price</th>
+                                <th>Pack Price</th>
                                 <th>Status</th>
                                 <th>Last Updated</th>
                                 <th>Actions</th>
@@ -267,8 +371,83 @@ if (mysqli_num_rows($res) > 0) {
                         </thead>
                         <tbody id="inventoryTableBody">
                             <!-- Table content will be dynamically populated -->
+                            <?php
+                            foreach ($trow as $row) {
+                                // print_r($row);die();
+                            ?>
+                                <tr>
+                                    <td></td>
+                                    <td><?php echo $row['product_name']; ?></td>
+                                    <td><?php echo $row['category']; ?></td>
+                                    <td><?php echo $row['product_stock']; ?></td>
+                                    <td><?php echo $row['price_per_sachet']; ?></td>
+                                    <td><?php echo $row['price_per_packet']; ?></td>
+                                    <td>
+                                        <?php
+                                            if ($row['product_stock'] <= $row['low_stock_alert']){
+                                                echo '<span class="status-badge status-low-stock">Low Stock</span>';
+                                            } elseif ($row['product_stock'] == 0 || $row['product_stock'] == 1) {
+                                                echo '<span class="status-badge status-out-of-stock">Out of Stock</span>';
+                                            } else {
+                                                echo '<span class="status-badge status-in-stock">In Stock</span>';
+                                            }
+                                        ?>
+                                    </td>
+                                    <td><?php echo $row['created_at']; ?></td>
+                                    <td>
+                                        <button class="action-btn" onclick="">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="action-btn" onclick="">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php
+                            }
+                            ?>
                         </tbody>
                     </table>
+                    <?php
+                    echo "<div class='pagination'>";
+                    if ($page > 1) {
+                        echo "<a href='?page=" . ($page - 1) . "'>&laquo; Prev</a>";
+                    }
+
+                    // Calculate range for pagination
+                    $start_page = max(1, $page - 2);
+                    $end_page = min($total_pages, $page + 2);
+
+                    // Show first page and ellipsis if needed
+                    if ($start_page > 1) {
+                        echo "<a href='?page=1'>1</a>";
+                        if ($start_page > 2) {
+                            echo "<span style='background-color: transparent; border: none; color: #495057;'>...</span>";
+                        }
+                    }
+
+                    // Show the page range
+                    for ($i = $start_page; $i <= $end_page; $i++) {
+                        if ($i == $page) {
+                            echo "<span>$i</span>";
+                        } else {
+                            echo "<a href='?page=$i'>$i</a>";
+                        }
+                    }
+
+                    // Show last page and ellipsis if needed
+                    if ($end_page < $total_pages) {
+                        if ($end_page < $total_pages - 1) {
+                            echo "<span style='background-color: transparent; border: none; color: #495057;'>...</span>";
+                        }
+                        echo "<a href='?page=$total_pages'>$total_pages</a>";
+                    }
+
+                    if ($page < $total_pages) {
+                        echo "<a href='?page=" . ($page + 1) . "'>Next &raquo;</a>";
+                    }
+                    echo "</div>";
+                    ?>
                 </div>
             </div>
         </div>
@@ -356,8 +535,9 @@ if (mysqli_num_rows($res) > 0) {
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="../style/js/search.js"></script>
     <script>
-        // Sample inventory data
+        /* // Sample inventory data
         let inventoryData = [{
                 id: 1,
                 name: 'iPhone 15 Pro',
@@ -433,7 +613,7 @@ if (mysqli_num_rows($res) > 0) {
             });
 
             renderInventoryTable(filteredData);
-        }
+        } */
 
         // Add product function
         function addProduct() {

@@ -6,7 +6,7 @@ include "../config/config.php";
 
 // Get the current page from the URL, defaulting to 1 if not set
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$limit = 8; // Number of rows per page
+$limit = 10; // Number of rows per page
 $offset = ($page - 1) * $limit;
 
 $total_qry = "SELECT COUNT(*) as total FROM products";
@@ -335,56 +335,56 @@ if (mysqli_num_rows($res) > 0) {
                     </tbody> -->
 
                     <tbody>
-        <?php foreach ($products as $product_id => $product): ?>
-            <tr class="highlight-row <?php echo ($product['stock'] <= 5) ? 'low-stock' : ''; ?>">
-                <td>
-                    <?php if (!empty($product['variants'])): ?>
-                        <span class="expand-btn" onclick="toggleVariants(<?php echo $product_id; ?>)" id="expand-<?php echo $product_id; ?>">
-                            <i class="fas fa-plus"></i>
-                        </span>
-                    <?php endif; ?>
-                </td>
-                <td><?php echo htmlspecialchars($product['name']); ?></td>
-                <td><?php echo htmlspecialchars($product['category']); ?></td>
-                <td><?php echo htmlspecialchars($product['stock']); ?></td>
-                <td>
-                    <button class="btn btn-sm btn-primary" onclick="openUpdateModal(<?php echo $product_id; ?>, '<?php echo htmlspecialchars($product['name']); ?>', <?php echo $product['stock']; ?>)">
-                        <i class="fas fa-edit me-1"></i>Update
-                    </button>
-                </td>
-            </tr>
+                        <?php foreach ($products as $product_id => $product): ?>
+                            <tr class="highlight-row <?php echo ($product['stock'] <= 5) ? 'low-stock' : ''; ?>">
+                                <td>
+                                    <?php if (!empty($product['variants'])): ?>
+                                        <span class="expand-btn" onclick="toggleVariants(<?php echo $product_id; ?>)" id="expand-<?php echo $product_id; ?>">
+                                            <i class="fas fa-plus"></i>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo htmlspecialchars($product['name']); ?></td>
+                                <td><?php echo htmlspecialchars($product['category']); ?></td>
+                                <td><?php echo htmlspecialchars($product['stock']); ?></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="openUpdateModal(<?php echo $product_id; ?>, '<?php echo htmlspecialchars($product['name']); ?>', <?php echo $product['stock']; ?>)">
+                                        <i class="fas fa-edit me-1"></i>Update
+                                    </button>
+                                </td>
+                            </tr>
 
-            <?php if (!empty($product['variants'])): ?>
-                <tr id="variants-<?php echo $product_id; ?>" class="variant-row" style="display: none;">
-                    <td colspan="5">
-                        <table class="variant-table">
-                            <thead>
-                                <tr>
-                                    <th>Variant</th>
-                                    <th>Stock</th>
-                                    <th>Actions</th>
+                            <?php if (!empty($product['variants'])): ?>
+                                <tr id="variants-<?php echo $product_id; ?>" class="variant-row" style="display: none;">
+                                    <td colspan="5">
+                                        <table class="variant-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Variant</th>
+                                                    <th>Stock</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($product['variants'] as $variant): ?>
+                                                    <tr>
+                                                        <td><?php echo htmlspecialchars($variant['variant_name']); ?></td>
+                                                        <td><?php echo htmlspecialchars($variant['stock']); ?></td>
+                                                        <td>
+                                                            <button class="btn btn-sm btn-outline-primary"
+                                                                onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['stock']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
+                                                                <i class="fas fa-edit me-1"></i>Update
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($product['variants'] as $variant): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($variant['variant_name']); ?></td>
-                                        <td><?php echo htmlspecialchars($variant['stock']); ?></td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-primary" 
-                                                    onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['stock']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
-                                                <i class="fas fa-edit me-1"></i>Update
-                                            </button>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </tbody>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </tbody>
                 </table>
                 <?php
                 echo "<div class='pagination'>";
