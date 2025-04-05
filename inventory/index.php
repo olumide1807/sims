@@ -33,12 +33,29 @@ $select_qry = "SELECT
             LIMIT $offset, $limit";
 
 $row = mysqli_query($connect, $select_qry);
+
+$products = [];
 if (mysqli_num_rows($row) > 0) {
     while ($rows = mysqli_fetch_assoc($row)) {
         /* echo '<pre>';
         print_r($rows);
         echo '</pre>'; */
-        $trow = $row;
+        // $trow = $row;
+
+        $products[$rows['product_id']]['name'] = $rows['product_name'];
+        $products[$rows['product_id']]['category'] = $rows['category'];
+        $products[$rows['product_id']]['stock'] = $rows['product_stock'];
+        $products[$rows['product_id']]['priceSachet'] = $rows['price_per_sachet'];
+        $products[$rows['product_id']]['pricePacket'] = $rows['price_per_packet'];
+        $products[$rows['product_id']]['lowStock'] = $rows['low_stock_alert'];
+        $products[$rows['product_id']]['lastUpdated'] = $rows['created_at'];
+
+        if ($rows['variant_id']) {
+            $products[$rows['product_id']]['variants'][] = [
+                'variant_name' => $rows['variant_name'],
+                'stock' => $rows['variant_stock']
+            ];
+        }
     }
     // die();
 }
@@ -196,6 +213,28 @@ if (mysqli_num_rows($res) > 0) {
                 padding: 0.25rem 0.5rem;
                 margin-bottom: 0.5rem;
             }
+        }
+
+        .variant-row td {
+            padding-left: 2rem;
+            background-color: #f8f9fa;
+        }
+
+        .expand-btn {
+            cursor: pointer;
+            width: 24px;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .variant-table {
+            width: 100%;
+            margin-bottom: 0;
+        }
+
+        .variant-table td,
+        .variant-table th {
+            padding: 0.5rem;
         }
     </style>
 </head>
@@ -372,28 +411,34 @@ if (mysqli_num_rows($res) > 0) {
                         <tbody id="inventoryTableBody">
                             <!-- Table content will be dynamically populated -->
                             <?php
-                            foreach ($trow as $row) {
+                            foreach ($products as $product_id => $product) {
                                 // print_r($row);die();
                             ?>
                                 <tr>
-                                    <td></td>
-                                    <td><?php echo $row['product_name']; ?></td>
-                                    <td><?php echo $row['category']; ?></td>
-                                    <td><?php echo $row['product_stock']; ?></td>
-                                    <td><?php echo $row['price_per_sachet']; ?></td>
-                                    <td><?php echo $row['price_per_packet']; ?></td>
+                                    <td>
+                                        <?php if (!empty($product['variants'])): ?>
+                                            <span class="expand-btn" onclick="toggleVariants(<?php echo $product_id; ?>)" id="expand-<?php echo $product_id; ?>">
+                                                <i class="fas fa-plus"></i>
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo $product['name']; ?></td>
+                                    <td><?php echo $product['category']; ?></td>
+                                    <td><?php echo $product['stock']; ?></td>
+                                    <td><?php echo $product['priceSachet']; ?></td>
+                                    <td><?php echo $product['pricePacket']; ?></td>
                                     <td>
                                         <?php
-                                            if ($row['product_stock'] <= $row['low_stock_alert']){
-                                                echo '<span class="status-badge status-low-stock">Low Stock</span>';
-                                            } elseif ($row['product_stock'] == 0 || $row['product_stock'] == 1) {
-                                                echo '<span class="status-badge status-out-of-stock">Out of Stock</span>';
-                                            } else {
-                                                echo '<span class="status-badge status-in-stock">In Stock</span>';
-                                            }
+                                        if ($product['stock'] <= $product['lowStock']) {
+                                            echo '<span class="status-badge status-low-stock">Low Stock</span>';
+                                        } elseif ($product['stock'] == 0 || $product['stock'] == 1) {
+                                            echo '<span class="status-badge status-out-of-stock">Out of Stock</span>';
+                                        } else {
+                                            echo '<span class="status-badge status-in-stock">In Stock</span>';
+                                        }
                                         ?>
                                     </td>
-                                    <td><?php echo $row['created_at']; ?></td>
+                                    <td><?php echo $product['lastUpdated']; ?></td>
                                     <td>
                                         <button class="action-btn" onclick="">
                                             <i class="fas fa-edit"></i>
@@ -403,6 +448,36 @@ if (mysqli_num_rows($res) > 0) {
                                         </button>
                                     </td>
                                 </tr>
+
+                                <?php if (!empty($product['variants'])) { ?>
+                                    <tr id="variants-<?php echo $product_id; ?>" class="variant-row" style="display: none;">
+                                        <td colspan="5">
+                                            <table class="variant-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Variant</th>
+                                                        <th>Stock</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($product['variants'] as $variant): ?>
+                                                        <tr>
+                                                            <td><?php echo htmlspecialchars($variant['variant_name']); ?></td>
+                                                            <td><?php echo htmlspecialchars($variant['stock']); ?></td>
+                                                            <td>
+                                                                <button class="btn btn-sm btn-outline-primary"
+                                                                    onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['stock']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
+                                                                    <i class="fas fa-edit me-1"></i>Update
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                <?php } ?>
                             <?php
                             }
                             ?>
@@ -537,84 +612,6 @@ if (mysqli_num_rows($res) > 0) {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script src="../style/js/search.js"></script>
     <script>
-        /* // Sample inventory data
-        let inventoryData = [{
-                id: 1,
-                name: 'iPhone 15 Pro',
-                category: 'electronics',
-                stock: 24,
-                price: 999.99,
-                status: 'in-stock',
-                lastUpdated: '2024-01-30'
-            },
-            {
-                id: 2,
-                name: 'Samsung Galaxy S23',
-                category: 'electronics',
-                stock: 5,
-                price: 899.99,
-                status: 'low-stock',
-                lastUpdated: '2024-01-29'
-            },
-            {
-                id: 3,
-                name: 'MacBook Pro',
-                category: 'electronics',
-                stock: 0,
-                price: 1299.99,
-                status: 'out-of-stock',
-                lastUpdated: '2024-01-28'
-            }
-        ];
-
-        // Function to render the inventory table
-        function renderInventoryTable(data) {
-            const tableBody = document.getElementById('inventoryTableBody');
-            tableBody.innerHTML = '';
-
-            data.forEach(item => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${item.name}</td>
-                    <td>${item.category}</td>
-                    <td>${item.stock}</td>
-                    <td>$${item.price.toFixed(2)}</td>
-                    <td><span class="status-badge status-${item.status}">${formatStatus(item.status)}</span></td>
-                    <td>${item.lastUpdated}</td>
-                    <td>
-                        <button class="action-btn" onclick="editProduct(${item.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn" onclick="deleteProduct(${item.id})">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
-        }
-
-        // Format status text
-        function formatStatus(status) {
-            return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-        }
-
-        // Filter functions
-        function applyFilters() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const category = document.getElementById('categoryFilter').value;
-            const status = document.getElementById('statusFilter').value;
-
-            const filteredData = inventoryData.filter(item => {
-                const matchesSearch = item.name.toLowerCase().includes(searchTerm);
-                const matchesCategory = !category || item.category === category;
-                const matchesStatus = !status || item.status === status;
-                return matchesSearch && matchesCategory && matchesStatus;
-            });
-
-            renderInventoryTable(filteredData);
-        } */
-
         // Add product function
         function addProduct() {
             const form = document.getElementById('addProductForm');
@@ -703,67 +700,20 @@ if (mysqli_num_rows($res) > 0) {
             }
         }, 3000); // Auto-close after 3 seconds
 
-        // function toggleSidebar() {
-        //     console.log('Toggle sidebar called'); // Debug log
-        //     const sidebar = document.getElementById('sidebar');
-        //     console.log('Sidebar element:', sidebar); // Check if sidebar is found
+        function toggleVariants(productId) {
+            const variantsRow = document.getElementById(`variants-${productId}`);
+            const expandBtn = document.getElementById(`expand-${productId}`);
 
-        //     if (sidebar) {
-        //         sidebar.classList.toggle('show');
-        //         console.log('Sidebar classes:', sidebar.className); // Log current classes
-        //     } else {
-        //         console.error('Sidebar element not found');
-        //     }
-        // }
-
-        // // Add click event listener as a backup
-        // document.querySelector('.mobile-menu-toggle').addEventListener('click', function(event) {
-        //     console.log('Mobile menu toggle clicked');
-        //     event.stopPropagation();
-        //     toggleSidebar();
-        // });
-
-        //         // Enhance mobile interactions
-        // document.addEventListener('DOMContentLoaded', () => {
-        //     const sidebar = document.getElementById('sidebar');
-        //     const mobileToggle = document.querySelector('.mobile-menu-toggle');
-
-        //     // Close sidebar when a link is clicked on mobile
-        //     sidebar.querySelectorAll('.nav-link').forEach(link => {
-        //         link.addEventListener('click', () => {
-        //             if (window.innerWidth <= 768) {
-        //                 sidebar.classList.remove('show');
-        //             }
-        //         });
-        //     });
-
-        //     // Prevent body scroll when sidebar is open
-        //     function toggleBodyScroll() {
-        //         if (window.innerWidth <= 768 && sidebar.classList.contains('show')) {
-        //             document.body.style.overflow = 'hidden';
-        //         } else {
-        //             document.body.style.overflow = 'auto';
-        //         }
-        //     }
-
-        //     // Add event listeners
-        //     mobileToggle.addEventListener('click', () => {
-        //         sidebar.classList.toggle('show');
-        //         toggleBodyScroll();
-        //     });
-
-        //     // Recheck responsive behavior on resize
-        //     window.addEventListener('resize', () => {
-        //         if (window.innerWidth > 768) {
-        //             sidebar.classList.remove('show');
-        //             document.body.style.overflow = 'auto';
-        //         }
-        //     });
-        // });
-
-        // Initial render
-        renderInventoryTable(inventoryData);
-        renderCategoriesTable(categoriesData);
+            if (variantsRow) {
+                if (variantsRow.style.display === 'none' || variantsRow.style.display === '') {
+                    variantsRow.style.display = 'table-row';
+                    expandBtn.innerHTML = '<i class="fas fa-minus"></i>';
+                } else {
+                    variantsRow.style.display = 'none';
+                    expandBtn.innerHTML = '<i class="fas fa-plus"></i>';
+                }
+            }
+        }
     </script>
 </body>
 

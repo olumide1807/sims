@@ -287,53 +287,6 @@ if (mysqli_num_rows($res) > 0) {
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <!-- <tbody id="">
-                        <?php
-                        foreach ($products as $product_id => $product) {
-                            echo "<tr>";
-                            echo "<td>
-                                    <button onclick='toggleVariants($product_id)'>➕ Show Variants</button>
-                                </td>";
-                            echo "<td>" . htmlspecialchars($product['name']) . "</td>";
-                            echo "<td>" . htmlspecialchars($product['category']) . "</td>";
-                            echo "<td>" . htmlspecialchars($product['stock']) . "</td>";
-                            echo "<td>
-                                    <button class='btn btn-sm btn-primary' onclick='openUpdateModal()'>
-                                        <i class='fas fa-edit me-1'></i>Update
-                                    </button>
-                                </td>";
-                            echo "</tr>";
-
-                            if (!empty($product['variants'])) {
-                                echo "<tr id='variants-$product_id' style='display: none;'><td colspan='4'>";
-                                echo "<table>";
-                                echo "<tr>
-                                        <th>Variant</th>
-                                        <th>SKU</th>
-                                        <th>Stock</th>
-                                        <th>Actions</th>
-                                      </tr>";
-
-                                foreach ($product['variants'] as $variant) {
-                                    echo "<tr>";
-                                    echo "<td>" . htmlspecialchars($variant['variant_name']) . "</td>";
-                                    // echo "<td>" . htmlspecialchars($variant['sku']) . "</td>";
-                                    echo "<td>" . htmlspecialchars($variant['stock']) . "</td>";
-                                    echo "<td>
-                                            <button class='btn btn-sm btn-secondary' onclick='openUpdateModalVariant()'>
-                                                <i class='fas fa-edit me-1'></i>Update
-                                            </button>
-                                          </td>";
-                                    echo "</tr>";
-                                }
-
-                                echo "</table>";
-                                echo "</td></tr>";
-                            }
-                        }
-                        ?>
-                    </tbody> -->
-
                     <tbody>
                         <?php foreach ($products as $product_id => $product): ?>
                             <tr class="highlight-row <?php echo ($product['stock'] <= 5) ? 'low-stock' : ''; ?>">
