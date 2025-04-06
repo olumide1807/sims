@@ -49,52 +49,97 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to update table content
-    function updateTableContent(items) {
-        const tableBody = document.querySelector('.inventory-table tbody');
-        tableBody.innerHTML = '';
-        
-        if (items.length === 0) {
-            const emptyRow = document.createElement('tr');
-            emptyRow.innerHTML = '<td colspan="9" class="text-center py-4">No products found matching your filters.</td>';
-            tableBody.appendChild(emptyRow);
-            return;
-        }
-        
-        items.forEach(item => {
-            const row = document.createElement('tr');
-            
-            // Determine status badge class
-            let statusBadge = '';
-            if (item.product_stock <= item.low_stock_alert && item.product_stock > 0) {
-                statusBadge = '<span class="status-badge status-low-stock">Low Stock</span>';
-            } else if (item.product_stock == 0) {
-                statusBadge = '<span class="status-badge status-out-of-stock">Out of Stock</span>';
-            } else {
-                statusBadge = '<span class="status-badge status-in-stock">In Stock</span>';
-            }
-            
-            row.innerHTML = `
-                <td></td>
-                <td>${item.product_name}</td>
-                <td>${item.category}</td>
-                <td>${item.product_stock}</td>
-                <td>${item.price_per_sachet}</td>
-                <td>${item.price_per_packet}</td>
-                <td>${statusBadge}</td>
-                <td>${item.created_at}</td>
-                <td>
-                    <button class="action-btn" onclick="editProduct(${item.product_id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn" onclick="deleteProduct(${item.product_id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            `;
-            tableBody.appendChild(row);
-        });
+function updateTableContent(items) {
+    const tableBody = document.getElementById('inventoryTableBody');
+    tableBody.innerHTML = '';
+    
+    if (items.length === 0) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.innerHTML = '<td colspan="9" class="text-center py-4">No products found matching your filters.</td>';
+        tableBody.appendChild(emptyRow);
+        return;
     }
     
+    items.forEach(item => {
+        // Create main product row
+        const row = document.createElement('tr');
+        
+        // Determine expand button for variants
+        let expandButton = '';
+        if (item.variants && item.variants.length > 0) {
+            expandButton = `<span class="expand-btn" onclick="toggleVariants(${item.product_id})" id="expand-${item.product_id}">
+                <i class="fas fa-plus"></i>
+            </span>`;
+        }
+        
+        // Determine status badge class
+        let statusBadge = '';
+        if (item.product_stock <= item.low_stock_alert && item.product_stock > 0) {
+            statusBadge = '<span class="status-badge status-low-stock">Low Stock</span>';
+        } else if (item.product_stock == 0) {
+            statusBadge = '<span class="status-badge status-out-of-stock">Out of Stock</span>';
+        } else {
+            statusBadge = '<span class="status-badge status-in-stock">In Stock</span>';
+        }
+        
+        row.innerHTML = `
+            <td>${expandButton}</td>
+            <td>${item.product_name}</td>
+            <td>${item.category}</td>
+            <td>${item.product_stock}</td>
+            <td>${item.price_per_sachet}</td>
+            <td>${item.price_per_packet}</td>
+            <td>${statusBadge}</td>
+            <td>${item.created_at}</td>
+            <td>
+                <button class="action-btn" onclick="editProduct(${item.product_id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="action-btn" onclick="deleteProduct(${item.product_id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+        
+        // Add variant rows if any
+        if (item.variants && item.variants.length > 0) {
+            const variantRow = document.createElement('tr');
+            variantRow.id = `variants-${item.product_id}`;
+            variantRow.className = 'variant-row';
+            variantRow.style.display = 'none';
+            
+            let variantContent = `<td colspan="9">
+                <table class="variant-table">
+                    <thead>
+                        <tr>
+                            <th>Variant</th>
+                            <th>Stock</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                    
+            item.variants.forEach(variant => {
+                variantContent += `
+                    <tr>
+                        <td>${variant.variant_name}</td>
+                        <td>${variant.variant_stock}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" 
+                                onclick="openUpdateVariantModal(${item.product_id}, '${variant.variant_name}', ${variant.variant_stock}, '${item.product_name}')">
+                                <i class="fas fa-edit me-1"></i>Update
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+            
+            variantContent += `</tbody></table></td>`;
+            variantRow.innerHTML = variantContent;
+            tableBody.appendChild(variantRow);
+        }
+    });
+}
     // Function to update pagination
     function updatePagination(paginationData) {
         const paginationContainer = document.querySelector('.pagination');
@@ -289,4 +334,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
+    applyFilters();
 });
