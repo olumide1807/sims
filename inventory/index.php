@@ -26,7 +26,10 @@ $select_qry = "SELECT
                 p.created_at, 
                 v.id AS variant_id, 
                 v.variant_name, 
-                v.quantity_packet AS variant_stock
+                v.qty_packet,
+                v.qty_sachet,
+                v.price_per_packet AS packPrice,
+                v.price_per_sachet AS unitPrice
             FROM products p
             LEFT JOIN product_variants v ON p.id = v.product_id
             ORDER BY p.id, v.id
@@ -53,7 +56,10 @@ if (mysqli_num_rows($row) > 0) {
         if ($rows['variant_id']) {
             $products[$rows['product_id']]['variants'][] = [
                 'variant_name' => $rows['variant_name'],
-                'stock' => $rows['variant_stock']
+                'QTY(Packet)' => $rows['qty_packet'],
+                'QTY(Sachet)' => $rows['qty_sachet'],
+                'Price(Packet)' => $rows['packPrice'],
+                'Price(Sachet)' => $rows['unitPrice']
             ];
         }
     }
@@ -409,7 +415,6 @@ if (mysqli_num_rows($res) > 0) {
                             </tr>
                         </thead>
                         <tbody id="inventoryTableBody">
-                            <!-- Table content will be dynamically populated -->
                             <?php
                             foreach ($products as $product_id => $product) {
                                 // print_r($row);die();
@@ -440,7 +445,7 @@ if (mysqli_num_rows($res) > 0) {
                                     </td>
                                     <td><?php echo $product['lastUpdated']; ?></td>
                                     <td>
-                                        <button class="action-btn" onclick="">
+                                        <button class="action-btn" onclick="editProduct(<?php echo $product_id; ?>)">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         <button class="action-btn" onclick="">
@@ -451,12 +456,15 @@ if (mysqli_num_rows($res) > 0) {
 
                                 <?php if (!empty($product['variants'])) { ?>
                                     <tr id="variants-<?php echo $product_id; ?>" class="variant-row" style="display: none;">
-                                        <td colspan="5">
+                                        <td colspan="9">
                                             <table class="variant-table">
                                                 <thead>
                                                     <tr>
                                                         <th>Variant</th>
-                                                        <th>Stock</th>
+                                                        <th>QTY(packs)</th>
+                                                        <th>QTY(Sachet)</th>
+                                                        <th>Price Packet</th>
+                                                        <th>Price Sachet</th>
                                                         <th>Actions</th>
                                                     </tr>
                                                 </thead>
@@ -464,11 +472,22 @@ if (mysqli_num_rows($res) > 0) {
                                                     <?php foreach ($product['variants'] as $variant): ?>
                                                         <tr>
                                                             <td><?php echo htmlspecialchars($variant['variant_name']); ?></td>
-                                                            <td><?php echo htmlspecialchars($variant['stock']); ?></td>
-                                                            <td>
+                                                            <td><?php echo htmlspecialchars($variant['qty_packet']); ?></td>
+                                                            <td><?php echo htmlspecialchars($variant['qty_sachet']); ?></td>
+                                                            <td><?php echo htmlspecialchars($variant['packPrice']); ?></td>
+                                                            <td><?php echo htmlspecialchars($variant['unitPrice']); ?></td>
+                                                            <!-- <td>
                                                                 <button class="btn btn-sm btn-outline-primary"
-                                                                    onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['stock']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
+                                                                    onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['qty_packet']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
                                                                     <i class="fas fa-edit me-1"></i>Update
+                                                                </button>
+                                                            </td> -->
+                                                            <td>
+                                                                <button class="action-btn" onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['qty_packet']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
+                                                                    <i class="fas fa-edit"></i>
+                                                                </button>
+                                                                <button class="action-btn" onclick="">
+                                                                    <i class="fas fa-trash"></i>
                                                                 </button>
                                                             </td>
                                                         </tr>
@@ -528,46 +547,6 @@ if (mysqli_num_rows($res) > 0) {
         </div>
     </div>
 
-    <!-- Add Product Modal -->
-    <!-- <div class="modal fade" id="addProductModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add New Product</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addProductForm">
-                        <div class="mb-3">
-                            <label class="form-label">Product Name</label>
-                            <input type="text" class="form-control" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Category</label>
-                            <select class="form-select" required>
-                                <option value="electronics">Electronics</option>
-                                <option value="clothing">Clothing</option>
-                                <option value="furniture">Furniture</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Initial Stock</label>
-                            <input type="number" class="form-control" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Price</label>
-                            <input type="number" class="form-control" step="0.01" required>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="addProduct()">Add Product</button>
-                </div>
-            </div>
-        </div>
-    </div> -->
-
     <!-- Add Category Modal -->
     <div class="modal fade" id="addCategoryModal" tabindex="-1">
         <div class="modal-dialog">
@@ -609,19 +588,60 @@ if (mysqli_num_rows($res) > 0) {
         </div>
     </div>
 
+    <!-- Edit Product Modal -->
+    <div class="modal fade" id="editProductModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editProductForm" method="post">
+                        <input type="hidden" id="edit_product_id" name="product_id" action="update_product.php">
+                        <div class="mb-3">
+                            <label class="form-label">Product Name</label>
+                            <input type="text" class="form-control" id="edit_product_name" name="product_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Category</label>
+                            <select class="form-select" id="edit_category" name="category" required>
+                                <?php
+                                foreach ($cat as $row) {
+                                    echo "<option value='{$row["category"]}'>{$row["category"]}</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Stock (Packets)</label>
+                            <input type="number" class="form-control" id="edit_stock" name="quantity_packet" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Unit Price (Per Sachet)</label>
+                            <input type="number" class="form-control" id="edit_price_sachet" name="price_per_sachet" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Pack Price (Per Packet)</label>
+                            <input type="number" class="form-control" id="edit_price_packet" name="price_per_packet" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Low Stock Alert</label>
+                            <input type="number" class="form-control" id="edit_low_stock" name="low_stock_alert" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveProductChanges">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script src="../style/js/search.js"></script>
     <script>
-        // Add product function
-        function addProduct() {
-            const form = document.getElementById('addProductForm');
-            const formData = new FormData(form);
-
-            // In a real application, you would send this data to a server
-            alert('Product added successfully!');
-            document.querySelector('#addProductModal').querySelector('.btn-close').click();
-        }
-
         // Add category function
         function addCategory() {
             const categoryName = document.getElementById('categoryName').value;
@@ -642,12 +662,6 @@ if (mysqli_num_rows($res) > 0) {
 
             // Close modal
             document.querySelector('#addCategoryModal').querySelector('.btn-close').click();
-        }
-
-        // Edit product function
-        function editProduct(id) {
-            // Implementation would go here
-            alert(`Editing product ${id}`);
         }
 
         // Delete product function
@@ -713,6 +727,136 @@ if (mysqli_num_rows($res) > 0) {
                     expandBtn.innerHTML = '<i class="fas fa-plus"></i>';
                 }
             }
+        }
+
+        /* function editProduct(productId) {
+            // Let's try a direct AJAX call
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', `../inventory/get_product.php?product_id=${productId}`, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    console.log("Status:", xhr.status);
+                    console.log("Response:", xhr.responseText);
+
+                    if (xhr.status === 200) {
+                        try {
+                            var data = JSON.parse(xhr.responseText);
+                            console.log("Parsed data:", data);
+                            // Process the data
+                        } catch (e) {
+                            console.error("Parse error:", e);
+                            alert("Invalid JSON response");
+                        }
+                    }
+                }
+            };
+            xhr.send();
+        } */
+
+        function editProduct(productId) {
+            // Make a direct fetch call to get_product.php
+            fetch(`get_product.php?product_id=${productId}`)
+                .then(response => response.json()) // Parse JSON directly
+                .then(data => {
+                    console.log("Product data:", data);
+
+                    if (data.success) {
+                        const product = data.product;
+
+                        // Populate the form fields
+                        document.getElementById('edit_product_id').value = product.id;
+                        document.getElementById('edit_product_name').value = product.product_name;
+
+                        // Set the category dropdown value
+                        const categorySelect = document.getElementById('edit_category');
+                        for (let i = 0; i < categorySelect.options.length; i++) {
+                            if (categorySelect.options[i].value === product.category) {
+                                categorySelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+
+                        document.getElementById('edit_stock').value = product.quantity_packet;
+                        document.getElementById('edit_price_sachet').value = product.price_per_sachet;
+                        document.getElementById('edit_price_packet').value = product.price_per_packet;
+                        document.getElementById('edit_low_stock').value = product.low_stock_alert;
+
+                        // Show the modal
+                        const editModal = new bootstrap.Modal(document.getElementById('editProductModal'));
+                        editModal.show();
+                    } else {
+                        showAlert('Error fetching product details: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while fetching product details.', 'error');
+                });
+        }
+
+        // Event listener for saving product changes
+        document.getElementById('saveProductChanges').addEventListener('click', function() {
+            const form = document.getElementById('editProductForm');
+            const formData = new FormData(form);
+
+            // Debug: Log the form data being sent
+            console.log("Sending form data:");
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            fetch('update_product.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log("Response status:", response.status);
+                    return response.json();
+                })
+
+                .then(data => {
+                    console.log("Response data:", data);
+                    if (data.success) {
+                        // Show success message
+                        showAlert('Product updated successfully!', 'success');
+
+                        // Close the modal
+                        const editModal = bootstrap.Modal.getInstance(document.getElementById('editProductModal'));
+                        editModal.hide();
+
+                        // Refresh the product list (you might want to implement a partial refresh instead)
+                        window.location.reload();
+                    } else {
+                        showAlert('Error updating product: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while updating the product.', 'error');
+                });
+        });
+
+        // Function to display alert messages
+        function showAlert(message, type) {
+            const alertBox = document.createElement('div');
+            alertBox.id = 'alertBox';
+            alertBox.className = `alert alert-${type === 'success' ? 'success' : 'error'}`;
+            alertBox.innerHTML = `
+        <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span> 
+        <strong>${type === 'success' ? 'Success!' : 'Error!'}</strong> ${message}
+    `;
+
+            document.body.appendChild(alertBox);
+
+            // Auto-close after 3 seconds
+            setTimeout(function() {
+                alertBox.style.opacity = "0";
+                setTimeout(function() {
+                    if (alertBox.parentNode) {
+                        alertBox.parentNode.removeChild(alertBox);
+                    }
+                }, 500);
+            }, 3000);
         }
     </script>
 </body>

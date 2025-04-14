@@ -32,7 +32,7 @@ $sel_qry = "SELECT
                 p.quantity_packet AS product_stock, 
                 v.id AS variant_id, 
                 v.variant_name, 
-                v.quantity_packet AS variant_stock
+                v.qty_packet AS variant_stock
             FROM products p
             LEFT JOIN product_variants v ON p.id = v.product_id
             ORDER BY p.id, v.id
