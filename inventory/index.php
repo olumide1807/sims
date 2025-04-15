@@ -55,11 +55,12 @@ if (mysqli_num_rows($row) > 0) {
 
         if ($rows['variant_id']) {
             $products[$rows['product_id']]['variants'][] = [
+                'variant_id' => $rows['variant_id'],
                 'variant_name' => $rows['variant_name'],
-                'QTY(Packet)' => $rows['qty_packet'],
-                'QTY(Sachet)' => $rows['qty_sachet'],
-                'Price(Packet)' => $rows['packPrice'],
-                'Price(Sachet)' => $rows['unitPrice']
+                'qty_packet' => $rows['qty_packet'],
+                'qty_sachet' => $rows['qty_sachet'],
+                'packPrice' => $rows['packPrice'],
+                'unitPrice' => $rows['unitPrice']
             ];
         }
     }
@@ -460,6 +461,7 @@ if (mysqli_num_rows($res) > 0) {
                                             <table class="variant-table">
                                                 <thead>
                                                     <tr>
+                                                        <th>S/N</th>
                                                         <th>Variant</th>
                                                         <th>QTY(packs)</th>
                                                         <th>QTY(Sachet)</th>
@@ -471,19 +473,14 @@ if (mysqli_num_rows($res) > 0) {
                                                 <tbody>
                                                     <?php foreach ($product['variants'] as $variant): ?>
                                                         <tr>
+                                                            <td><?php echo $variant['variant_id']; ?></td>
                                                             <td><?php echo htmlspecialchars($variant['variant_name']); ?></td>
                                                             <td><?php echo htmlspecialchars($variant['qty_packet']); ?></td>
                                                             <td><?php echo htmlspecialchars($variant['qty_sachet']); ?></td>
                                                             <td><?php echo htmlspecialchars($variant['packPrice']); ?></td>
                                                             <td><?php echo htmlspecialchars($variant['unitPrice']); ?></td>
-                                                            <!-- <td>
-                                                                <button class="btn btn-sm btn-outline-primary"
-                                                                    onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['qty_packet']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
-                                                                    <i class="fas fa-edit me-1"></i>Update
-                                                                </button>
-                                                            </td> -->
                                                             <td>
-                                                                <button class="action-btn" onclick="openUpdateVariantModal(<?php echo $product_id; ?>, '<?php echo $variant['variant_name']; ?>', <?php echo $variant['qty_packet']; ?>, '<?php echo htmlspecialchars($product['name']); ?>')">
+                                                                <button class="action-btn" onclick="editVariant(<?php echo $variant['variant_id']; ?>)">
                                                                     <i class="fas fa-edit"></i>
                                                                 </button>
                                                                 <button class="action-btn" onclick="">
@@ -597,7 +594,7 @@ if (mysqli_num_rows($res) > 0) {
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="editProductForm" method="post">
+                    <form id="editProductForm" method="post" action="update_product.php">
                         <input type="hidden" id="edit_product_id" name="product_id" action="update_product.php">
                         <div class="mb-3">
                             <label class="form-label">Product Name</label>
@@ -634,6 +631,52 @@ if (mysqli_num_rows($res) > 0) {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="saveProductChanges">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Variant Modal -->
+    <div class="modal fade" id="editVariantModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Variant</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editVariantForm">
+                        <input type="hidden" id="edit_variant_id" name="variant_id">
+                        <input type="hidden" id="edit_variant_product_id" name="product_id">
+                        <div class="mb-3">
+                            <label class="form-label">Product</label>
+                            <input type="text" class="form-control" id="edit_variant_product_name" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Variant Name</label>
+                            <input type="text" class="form-control" id="edit_variant_name" name="variant_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantity (Packets)</label>
+                            <input type="number" class="form-control" id="edit_variant_qty_packet" name="qty_packet" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantity (Sachets)</label>
+                            <input type="number" class="form-control" id="edit_variant_qty_sachet" name="qty_sachet" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price Per Packet</label>
+                            <input type="number" class="form-control" id="edit_variant_price_packet" name="price_per_packet" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price Per Sachet</label>
+                            <input type="number" class="form-control" id="edit_variant_price_sachet" name="price_per_sachet" step="0.01" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveVariantChanges">Save Changes</button>
                 </div>
             </div>
         </div>
@@ -729,30 +772,6 @@ if (mysqli_num_rows($res) > 0) {
             }
         }
 
-        /* function editProduct(productId) {
-            // Let's try a direct AJAX call
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', `../inventory/get_product.php?product_id=${productId}`, true);
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    console.log("Status:", xhr.status);
-                    console.log("Response:", xhr.responseText);
-
-                    if (xhr.status === 200) {
-                        try {
-                            var data = JSON.parse(xhr.responseText);
-                            console.log("Parsed data:", data);
-                            // Process the data
-                        } catch (e) {
-                            console.error("Parse error:", e);
-                            alert("Invalid JSON response");
-                        }
-                    }
-                }
-            };
-            xhr.send();
-        } */
-
         function editProduct(productId) {
             // Make a direct fetch call to get_product.php
             fetch(`get_product.php?product_id=${productId}`)
@@ -833,6 +852,100 @@ if (mysqli_num_rows($res) > 0) {
                 .catch(error => {
                     console.error('Error:', error);
                     showAlert('An error occurred while updating the product.', 'error');
+                });
+        });
+
+        // Function to edit a variant
+        function editVariant(variantId) {
+            console.log("Editing variant with ID:", variantId);
+
+            // Make a direct fetch call to get_product.php
+            fetch(`get_product.php?variant_id=${variantId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Variant data:", data);
+
+                    if (data.success) {
+                        const variant = data.variant;
+
+                        // Populate the form fields
+                        document.getElementById('edit_variant_id').value = variant.id;
+                        document.getElementById('edit_variant_product_id').value = variant.product_id;
+
+                        // Fetch the product name
+                        fetch(`get_product.php?product_id=${variant.product_id}`)
+                            .then(response => response.json())
+                            .then(productData => {
+                                if (productData.success) {
+                                    document.getElementById('edit_variant_product_name').value = productData.product.product_name;
+                                } else {
+                                    document.getElementById('edit_variant_product_name').value = "Product ID: " + variant.product_id;
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error fetching product:', error);
+                                document.getElementById('edit_variant_product_name').value = "Product ID: " + variant.product_id;
+                            });
+
+                        document.getElementById('edit_variant_name').value = variant.variant_name;
+                        document.getElementById('edit_variant_qty_packet').value = variant.qty_packet;
+                        document.getElementById('edit_variant_qty_sachet').value = variant.qty_sachet;
+                        document.getElementById('edit_variant_price_packet').value = variant.price_per_packet;
+                        document.getElementById('edit_variant_price_sachet').value = variant.price_per_sachet;
+
+                        // Show the modal
+                        const editModal = new bootstrap.Modal(document.getElementById('editVariantModal'));
+                        editModal.show();
+                    } else {
+                        showAlert('Error fetching variant details: ' + data.message, 'error');
+                        console.error('Variant not found with ID:', variantId);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while fetching variant details.', 'error');
+                });
+        }
+
+        function openUpdateVariantModal(variantId) {
+            editVariant(variantId);
+        }
+
+        // Event listener for saving variant changes
+        document.getElementById('saveVariantChanges').addEventListener('click', function() {
+            const form = document.getElementById('editVariantForm');
+            const formData = new FormData(form);
+
+            // Debug: Log the form data being sent
+            console.log("Sending variant form data:");
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            fetch('update_product.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Response data:", data);
+                    if (data.success) {
+                        // Show success message
+                        showAlert('Variant updated successfully!', 'success');
+
+                        // Close the modal
+                        const editModal = bootstrap.Modal.getInstance(document.getElementById('editVariantModal'));
+                        editModal.hide();
+
+                        // Refresh the product list
+                        window.location.reload();
+                    } else {
+                        showAlert('Error updating variant: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while updating the variant.', 'error');
                 });
         });
 
