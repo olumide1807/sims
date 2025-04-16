@@ -24,7 +24,7 @@ if (isset($_GET['product_id'])) {
     $variant_id = (int)$_GET['variant_id'];
     error_log("Requested variant_id: " . $variant_id);
     
-    $query = "SELECT * FROM product_variants WHERE product_id = $variant_id";
+    $query = "SELECT * FROM `product_variants` WHERE id = $variant_id";
     error_log("SQL Query: " . $query);
 
     $result = mysqli_query($connect, $query);

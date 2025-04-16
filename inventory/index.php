@@ -40,11 +40,13 @@ $row = mysqli_query($connect, $select_qry);
 $products = [];
 if (mysqli_num_rows($row) > 0) {
     while ($rows = mysqli_fetch_assoc($row)) {
+        error_log("Variant row data: " . print_r($rows, true));
         /* echo '<pre>';
         print_r($rows);
         echo '</pre>'; */
         // $trow = $row;
 
+        $products[$rows['product_id']]['id'] = $rows['product_id'];
         $products[$rows['product_id']]['name'] = $rows['product_name'];
         $products[$rows['product_id']]['category'] = $rows['category'];
         $products[$rows['product_id']]['stock'] = $rows['product_stock'];
@@ -64,7 +66,6 @@ if (mysqli_num_rows($row) > 0) {
             ];
         }
     }
-    // die();
 }
 
 if (isset($_POST['addCat'])) {
@@ -449,6 +450,9 @@ if (mysqli_num_rows($res) > 0) {
                                         <button class="action-btn" onclick="editProduct(<?php echo $product_id; ?>)">
                                             <i class="fas fa-edit"></i>
                                         </button>
+                                        <button class="action-btn" onclick="openAddVariantModal(<?php echo $product_id; ?>, '<?php echo addslashes($product['name']); ?>')">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </button>
                                         <button class="action-btn" onclick="">
                                             <i class="fas fa-trash"></i>
                                         </button>
@@ -461,7 +465,6 @@ if (mysqli_num_rows($res) > 0) {
                                             <table class="variant-table">
                                                 <thead>
                                                     <tr>
-                                                        <th>S/N</th>
                                                         <th>Variant</th>
                                                         <th>QTY(packs)</th>
                                                         <th>QTY(Sachet)</th>
@@ -473,7 +476,6 @@ if (mysqli_num_rows($res) > 0) {
                                                 <tbody>
                                                     <?php foreach ($product['variants'] as $variant): ?>
                                                         <tr>
-                                                            <td><?php echo $variant['variant_id']; ?></td>
                                                             <td><?php echo htmlspecialchars($variant['variant_name']); ?></td>
                                                             <td><?php echo htmlspecialchars($variant['qty_packet']); ?></td>
                                                             <td><?php echo htmlspecialchars($variant['qty_sachet']); ?></td>
@@ -581,6 +583,51 @@ if (mysqli_num_rows($res) > 0) {
                         <input type="submit" class="btn btn-primary" name="addCat" value="Add Category">
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Variant Modal -->
+    <div class="modal fade" id="addVariantModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Variant</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addVariantForm">
+                        <input type="hidden" id="add_variant_product_id" name="product_id">
+                        <div class="mb-3">
+                            <label class="form-label">Product</label>
+                            <input type="text" class="form-control" id="add_variant_product_name" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Variant Name</label>
+                            <input type="text" class="form-control" id="add_variant_name" name="variant_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantity (Packets)</label>
+                            <input type="number" class="form-control" id="add_variant_qty_packet" name="qty_packet" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantity (Sachets)</label>
+                            <input type="number" class="form-control" id="add_variant_qty_sachet" name="qty_sachet" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price Per Packet</label>
+                            <input type="number" class="form-control" id="add_variant_price_packet" name="price_per_packet" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price Per Sachet</label>
+                            <input type="number" class="form-control" id="add_variant_price_sachet" name="price_per_sachet" step="0.01" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveNewVariant">Add Variant</button>
+                </div>
             </div>
         </div>
     </div>
@@ -946,6 +993,65 @@ if (mysqli_num_rows($res) > 0) {
                 .catch(error => {
                     console.error('Error:', error);
                     showAlert('An error occurred while updating the variant.', 'error');
+                });
+        });
+
+        // Function to open the Add Variant modal
+        function openAddVariantModal(productId, productName) {
+            // Set the product ID and name in the form
+            document.getElementById('add_variant_product_id').value = productId;
+            document.getElementById('add_variant_product_name').value = productName;
+
+            // Clear other form fields
+            document.getElementById('add_variant_name').value = '';
+            document.getElementById('add_variant_qty_packet').value = '';
+            document.getElementById('add_variant_qty_sachet').value = '';
+            document.getElementById('add_variant_price_packet').value = '';
+            document.getElementById('add_variant_price_sachet').value = '';
+
+            // Show the modal
+            const addModal = new bootstrap.Modal(document.getElementById('addVariantModal'));
+            addModal.show();
+        }
+
+        // Event listener for saving new variant
+        document.getElementById('saveNewVariant').addEventListener('click', function() {
+            const form = document.getElementById('addVariantForm');
+            const formData = new FormData(form);
+
+            // Add a flag to indicate this is a new variant
+            formData.append('action', 'add_variant');
+
+            // Debug: Log the form data being sent
+            console.log("Sending new variant form data:");
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            fetch('update_product.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Response data:", data);
+                    if (data.success) {
+                        // Show success message
+                        showAlert('Variant added successfully!', 'success');
+
+                        // Close the modal
+                        const addModal = bootstrap.Modal.getInstance(document.getElementById('addVariantModal'));
+                        addModal.hide();
+
+                        // Refresh the product list
+                        window.location.reload();
+                    } else {
+                        showAlert('Error adding variant: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while adding the variant.', 'error');
                 });
         });
 

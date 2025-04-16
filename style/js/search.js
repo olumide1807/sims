@@ -95,6 +95,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 <button class="action-btn" onclick="editProduct(${item.product_id})">
                     <i class="fas fa-edit"></i>
                 </button>
+                <button class="action-btn" onclick="openAddVariantModal(${item.product_id}, '${item.product_name}')">
+                    <i class="fas fa-plus-circle"></i>
+                </button>
                 <button class="action-btn" onclick="deleteProduct(${item.product_id})">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -133,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <td>${variant.unitPrice}</td>
                         
                         <td>
-                            <button class="action-btn" onclick="openUpdateVariantModal(${item.product_id}, '${variant.variant_name}', ${variant.qty_packet}, '${item.product_name}')">
+                            <button class="action-btn" onclick="openUpdateVariantModal(${variant.variant_id}, '${variant.variant_name}', ${variant.qty_packet}, '${item.product_name}')">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="action-btn" onclick="">
@@ -149,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-    
+
     // Function to update pagination
     function updatePagination(paginationData) {
         const paginationContainer = document.querySelector('.pagination');
