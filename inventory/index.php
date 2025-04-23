@@ -18,7 +18,9 @@ $total_pages = ceil($total_products / $limit);
 $select_qry = "SELECT 
                 p.id AS product_id, 
                 p.product_name, 
-                p.category, 
+                p.category,
+                p.batch_number,
+                p.brand, 
                 p.quantity_packet AS product_stock,
                 p.price_per_sachet,
                 p.price_per_packet,
@@ -49,6 +51,8 @@ if (mysqli_num_rows($row) > 0) {
         $products[$rows['product_id']]['id'] = $rows['product_id'];
         $products[$rows['product_id']]['name'] = $rows['product_name'];
         $products[$rows['product_id']]['category'] = $rows['category'];
+        $products[$rows['product_id']]['batch_number'] = $rows['batch_number'];
+        $products[$rows['product_id']]['brand'] = $rows['brand'];
         $products[$rows['product_id']]['stock'] = $rows['product_stock'];
         $products[$rows['product_id']]['priceSachet'] = $rows['price_per_sachet'];
         $products[$rows['product_id']]['pricePacket'] = $rows['price_per_packet'];
@@ -244,6 +248,39 @@ if (mysqli_num_rows($res) > 0) {
         .variant-table th {
             padding: 0.5rem;
         }
+
+        #variant_edit_notice {
+            display: none;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background-color: #e7f3ff;
+            border-left: 4px solid #0d6efd;
+            color: #084298;
+            font-size: 0.9rem;
+            position: relative;
+            clear: both;
+            width: 100%;
+            box-sizing: border-box;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+        }
+
+        #variant_edit_notice:before {
+            content: '\f05a';
+            /* Font Awesome info icon */
+            font-family: 'Font Awesome 5 Free';
+            font-weight: 900;
+            margin-right: 10px;
+            font-size: 1.1rem;
+            color: #0d6efd;
+        }
+
+        #variant_edit_notice strong {
+            font-weight: 600;
+        }
     </style>
 </head>
 
@@ -408,6 +445,8 @@ if (mysqli_num_rows($res) > 0) {
                                 <th width="40"></th>
                                 <th>Product Name</th>
                                 <th>Category</th>
+                                <th>Batch Number</th>
+                                <th>Brand</th>
                                 <th>Stock</th>
                                 <th>Unit Price</th>
                                 <th>Pack Price</th>
@@ -431,7 +470,21 @@ if (mysqli_num_rows($res) > 0) {
                                     </td>
                                     <td><?php echo $product['name']; ?></td>
                                     <td><?php echo $product['category']; ?></td>
-                                    <td><?php echo $product['stock']; ?></td>
+                                    <td><?php echo $product['batch_number']; ?></td>
+                                    <td><?php echo $product['brand']; ?></td>
+                                    <td>
+                                        <?php
+                                        if (!empty($product['variants'])) {
+                                            $total_stock = 0;
+                                            foreach ($product['variants'] as $variant) {
+                                                $total_stock += $variant['qty_packet'];
+                                            }
+                                            echo $total_stock;
+                                        } else {
+                                            echo $product['stock'];
+                                        }
+                                        ?>
+                                    </td>
                                     <td><?php echo $product['priceSachet']; ?></td>
                                     <td><?php echo $product['pricePacket']; ?></td>
                                     <td>
@@ -453,7 +506,7 @@ if (mysqli_num_rows($res) > 0) {
                                         <button class="action-btn" onclick="openAddVariantModal(<?php echo $product_id; ?>, '<?php echo addslashes($product['name']); ?>')">
                                             <i class="fas fa-plus-circle"></i>
                                         </button>
-                                        <button class="action-btn" onclick="">
+                                        <button class="action-btn" onclick="confirmDeleteProduct(<?php echo $product_id; ?>, '<?php echo addslashes($product['name']); ?>')">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -485,7 +538,7 @@ if (mysqli_num_rows($res) > 0) {
                                                                 <button class="action-btn" onclick="editVariant(<?php echo $variant['variant_id']; ?>)">
                                                                     <i class="fas fa-edit"></i>
                                                                 </button>
-                                                                <button class="action-btn" onclick="">
+                                                                <button class="action-btn" onclick="confirmDeleteVariant(<?php echo $variant['variant_id']; ?>, '<?php echo addslashes($variant['variant_name']); ?>')">
                                                                     <i class="fas fa-trash"></i>
                                                                 </button>
                                                             </td>
@@ -569,17 +622,9 @@ if (mysqli_num_rows($res) > 0) {
                             <label class="form-label">Description</label>
                             <textarea class="form-control" id="categoryDescription" name="cat_desc" rows="3" required></textarea>
                         </div>
-                        <!-- <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select class="form-select" id="categoryStatus" required>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
-                        </div> -->
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <!-- <button type="button" class="btn btn-primary" name="addCat">Add Category</button> -->
                         <input type="submit" class="btn btn-primary" name="addCat" value="Add Category">
                     </div>
                 </form>
@@ -658,6 +703,14 @@ if (mysqli_num_rows($res) > 0) {
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">Brand</label>
+                            <input type="text" class="form-control" id="edit_brand" name="brand">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Batch Number</label>
+                            <input type="text" class="form-control" id="edit_batch_number" name="batch_number">
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Stock (Packets)</label>
                             <input type="number" class="form-control" id="edit_stock" name="quantity_packet" required>
                         </div>
@@ -672,6 +725,12 @@ if (mysqli_num_rows($res) > 0) {
                         <div class="mb-3">
                             <label class="form-label">Low Stock Alert</label>
                             <input type="number" class="form-control" id="edit_low_stock" name="low_stock_alert" required>
+                        </div>
+
+                        <div class="mb-3" id="variant_edit_notice_container">
+                            <div id="variant_edit_notice">
+                                <span><strong>Notice:</strong> <br />This product has variants. Stock and pricing should be managed through individual variants. <br /> Stock is the sum of total stock left in packet and sachet of all variants.</span>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -729,6 +788,27 @@ if (mysqli_num_rows($res) > 0) {
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="deleteConfirmMessage">Are you sure you want to delete this item?</p>
+                    <input type="hidden" id="deleteItemId">
+                    <input type="hidden" id="deleteItemType">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script src="../style/js/search.js"></script>
     <script>
@@ -752,14 +832,6 @@ if (mysqli_num_rows($res) > 0) {
 
             // Close modal
             document.querySelector('#addCategoryModal').querySelector('.btn-close').click();
-        }
-
-        // Delete product function
-        function deleteProduct(id) {
-            if (confirm('Are you sure you want to delete this product?')) {
-                inventoryData = inventoryData.filter(item => item.id !== id);
-                renderInventoryTable(inventoryData);
-            }
         }
 
         // Sidebar toggle function
@@ -804,30 +876,39 @@ if (mysqli_num_rows($res) > 0) {
             }
         }, 3000); // Auto-close after 3 seconds
 
+        // Add this function to your JavaScript or modify existing one
         function toggleVariants(productId) {
-            const variantsRow = document.getElementById(`variants-${productId}`);
+            const variantContainer = document.getElementById(`variants-${productId}`);
             const expandBtn = document.getElementById(`expand-${productId}`);
 
-            if (variantsRow) {
-                if (variantsRow.style.display === 'none' || variantsRow.style.display === '') {
-                    variantsRow.style.display = 'table-row';
-                    expandBtn.innerHTML = '<i class="fas fa-minus"></i>';
-                } else {
-                    variantsRow.style.display = 'none';
-                    expandBtn.innerHTML = '<i class="fas fa-plus"></i>';
-                }
+            if (variantContainer.style.display === 'none') {
+                variantContainer.style.display = 'table-row-group'; // Use table-row-group for tbody
+                expandBtn.innerHTML = '<i class="fas fa-minus"></i>';
+
+                // Store expanded state in session storage to maintain it across pagination
+        sessionStorage.setItem(`expanded-${productId}`, 'true');
+            } else {
+                variantContainer.style.display = 'none';
+                expandBtn.innerHTML = '<i class="fas fa-plus"></i>';
+
+                // Remove expanded state from session storage
+        sessionStorage.removeItem(`expanded-${productId}`);
             }
         }
 
         function editProduct(productId) {
             // Make a direct fetch call to get_product.php
             fetch(`get_product.php?product_id=${productId}`)
-                .then(response => response.json()) // Parse JSON directly
+                .then(response => response.json())
                 .then(data => {
                     console.log("Product data:", data);
 
                     if (data.success) {
                         const product = data.product;
+
+                        // Check if the product has variants
+                        const hasVariants = document.getElementById(`variants-${productId}`) !== null;
+                        console.log("Has variants:", hasVariants);
 
                         // Populate the form fields
                         document.getElementById('edit_product_id').value = product.id;
@@ -842,9 +923,82 @@ if (mysqli_num_rows($res) > 0) {
                             }
                         }
 
-                        document.getElementById('edit_stock').value = product.quantity_packet;
-                        document.getElementById('edit_price_sachet').value = product.price_per_sachet;
-                        document.getElementById('edit_price_packet').value = product.price_per_packet;
+                        // Set brand and batch number
+                        document.getElementById('edit_brand').value = product.brand || '';
+                        document.getElementById('edit_batch_number').value = product.batch_number || '';
+
+                        // Get references to stock and pricing fields
+                        const stockField = document.getElementById('edit_stock');
+                        const priceSachetField = document.getElementById('edit_price_sachet');
+                        const pricePacketField = document.getElementById('edit_price_packet');
+                        const stockFieldContainer = stockField.closest('.mb-3');
+                        const priceSachetFieldContainer = priceSachetField.closest('.mb-3');
+                        const pricePacketFieldContainer = pricePacketField.closest('.mb-3');
+
+                        // Show or hide notification about variants
+                        const variantNotice = document.getElementById('variant_edit_notice');
+
+                        if (hasVariants) {
+                            // Show the variant notice
+                            variantNotice.style.display = 'block';
+
+                            // Disable stock and price fields
+                            stockField.disabled = true;
+                            priceSachetField.disabled = true;
+                            pricePacketField.disabled = true;
+
+                            // Calculate total stock from variants - same as shown in the product table
+                            let totalStock = 0;
+
+                            // Debug the variants data
+                            console.log("Variants data:", product.variants);
+
+                            if (product.variants && product.variants.length > 0) {
+                                product.variants.forEach(variant => {
+                                    console.log("Processing variant:", variant);
+                                    const qty = parseInt(variant.qty_packet || 0);
+                                    console.log("Variant quantity:", qty);
+                                    totalStock += qty;
+                                });
+                            }
+
+                            console.log("Calculated total stock:", totalStock);
+
+                            // If we couldn't calculate from variants, fall back to the product's stock
+                            if (totalStock === 0) {
+                                totalStock = parseInt(product.quantity_packet || 0);
+                                console.log("Using product's own stock value:", totalStock);
+                            }
+
+                            // Set the stock field to show the calculated total stock
+                            stockField.value = totalStock;
+
+                            // Add visual indication
+                            stockFieldContainer.classList.add('opacity-50');
+                            priceSachetFieldContainer.classList.add('opacity-50');
+                            pricePacketFieldContainer.classList.add('opacity-50');
+                        } else {
+                            // Hide the variant notice
+                            variantNotice.style.display = 'none';
+
+                            // Enable the fields
+                            stockField.disabled = false;
+                            priceSachetField.disabled = false;
+                            pricePacketField.disabled = false;
+
+                            // Remove visual indication
+                            stockFieldContainer.classList.remove('opacity-50');
+                            priceSachetFieldContainer.classList.remove('opacity-50');
+                            pricePacketFieldContainer.classList.remove('opacity-50');
+
+                            // Use the product's own stock value
+                            stockField.value = product.quantity_packet;
+                        }
+
+                        // Always populate the fields (even if disabled)
+                        // stockField.value = product.quantity_packet;
+                        priceSachetField.value = product.price_per_sachet;
+                        pricePacketField.value = product.price_per_packet;
                         document.getElementById('edit_low_stock').value = product.low_stock_alert;
 
                         // Show the modal
@@ -865,6 +1019,19 @@ if (mysqli_num_rows($res) > 0) {
             const form = document.getElementById('editProductForm');
             const formData = new FormData(form);
 
+            // Get the product ID to check if it has variants
+            const productId = document.getElementById('edit_product_id').value;
+            const hasVariants = document.getElementById(`variants-${productId}`) !== null;
+
+            // If the product has variants, we need to handle the disabled fields differently
+            if (hasVariants) {
+                // Remove the disabled attribute temporarily so the values are included in the form submission
+                // This ensures we don't lose the original values when updating only basic info
+                document.getElementById('edit_stock').disabled = false;
+                document.getElementById('edit_price_sachet').disabled = false;
+                document.getElementById('edit_price_packet').disabled = false;
+            }
+
             // Debug: Log the form data being sent
             console.log("Sending form data:");
             for (let pair of formData.entries()) {
@@ -879,7 +1046,6 @@ if (mysqli_num_rows($res) > 0) {
                     console.log("Response status:", response.status);
                     return response.json();
                 })
-
                 .then(data => {
                     console.log("Response data:", data);
                     if (data.success) {
@@ -890,7 +1056,7 @@ if (mysqli_num_rows($res) > 0) {
                         const editModal = bootstrap.Modal.getInstance(document.getElementById('editProductModal'));
                         editModal.hide();
 
-                        // Refresh the product list (you might want to implement a partial refresh instead)
+                        // Refresh the product list
                         window.location.reload();
                     } else {
                         showAlert('Error updating product: ' + data.message, 'error');
@@ -1052,6 +1218,66 @@ if (mysqli_num_rows($res) > 0) {
                 .catch(error => {
                     console.error('Error:', error);
                     showAlert('An error occurred while adding the variant.', 'error');
+                });
+        });
+
+        // Function to confirm deletion of a product
+        function confirmDeleteProduct(productId, productName) {
+            // Check if the product has variants by looking for the variants row
+            const variantsRow = document.getElementById(`variants-${productId}`);
+            const hasVariants = variantsRow !== null;
+
+            if (hasVariants) {
+                document.getElementById('deleteConfirmMessage').innerHTML =
+                    `<strong>Warning:</strong> This process will delete the product "${productName}" and all its variants. 
+             This action is not recoverable. Do you wish to continue?`;
+            } else {
+                document.getElementById('deleteConfirmMessage').innerHTML =
+                    `Are you sure you want to delete the product "${productName}"?<br /><strong>Warning:</strong> This action is not recoverable.`;
+            }
+
+            document.getElementById('deleteItemId').value = productId;
+            document.getElementById('deleteItemType').value = 'product';
+
+            const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+            deleteModal.show();
+        }
+
+        // Event listener for the delete confirmation button
+        document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+            const itemId = document.getElementById('deleteItemId').value;
+            const itemType = document.getElementById('deleteItemType').value;
+
+            // Create form data for the delete request
+            const formData = new FormData();
+            formData.append('action', 'delete_item');
+            formData.append('item_type', itemType);
+            formData.append('item_id', itemId);
+
+            // Send delete request to the server
+            fetch('update_product.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        showAlert(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} deleted successfully!`, 'success');
+
+                        // Close the modal
+                        const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+                        deleteModal.hide();
+
+                        // Refresh the page to update the product list
+                        window.location.reload();
+                    } else {
+                        showAlert(`Error deleting ${itemType}: ${data.message}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert(`An error occurred while deleting the ${itemType}.`, 'error');
                 });
         });
 

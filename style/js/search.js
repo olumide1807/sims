@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (items.length === 0) {
             const emptyRow = document.createElement('tr');
-            emptyRow.innerHTML = '<td colspan="9" class="text-center py-4">No products found matching your filters.</td>';
+            emptyRow.innerHTML = '<td colspan="11" class="text-center py-4">No products found matching your filters.</td>';
             tableBody.appendChild(emptyRow);
             return;
         }
@@ -63,13 +63,15 @@ document.addEventListener('DOMContentLoaded', function () {
         items.forEach(item => {
             // Create main product row
             const row = document.createElement('tr');
+            row.dataset.productId = item.product_id;
 
             // Determine expand button for variants
             let expandButton = '';
             if (item.variants && item.variants.length > 0) {
+                const isExpanded = sessionStorage.getItem(`expanded-${item.product_id}`) === 'true';
                 expandButton = `<span class="expand-btn" onclick="toggleVariants(${item.product_id})" id="expand-${item.product_id}">
-                <i class="fas fa-plus"></i>
-            </span>`;
+                    <i class="fas fa-${isExpanded ? 'minus' : 'plus'}"></i>
+                </span>`;
             }
 
             // Determine status badge class
@@ -83,26 +85,28 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             row.innerHTML = `
-            <td>${expandButton}</td>
-            <td>${item.product_name}</td>
-            <td>${item.category}</td>
-            <td>${item.product_stock}</td>
-            <td>${item.price_per_sachet}</td>
-            <td>${item.price_per_packet}</td>
-            <td>${statusBadge}</td>
-            <td>${item.created_at}</td>
-            <td>
-                <button class="action-btn" onclick="editProduct(${item.product_id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="action-btn" onclick="openAddVariantModal(${item.product_id}, '${item.product_name}')">
-                    <i class="fas fa-plus-circle"></i>
-                </button>
-                <button class="action-btn" onclick="deleteProduct(${item.product_id})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
+                <td>${expandButton}</td>
+                <td>${item.product_name}</td>
+                <td>${item.category}</td>
+                <td>${item.batch_number}</td>
+                <td>${item.brand}</td>
+                <td>${item.total_stock !== undefined ? item.total_stock : item.product_stock}</td>
+                <td>${item.price_per_sachet}</td>
+                <td>${item.price_per_packet}</td>
+                <td>${statusBadge}</td>
+                <td>${item.created_at}</td>
+                <td>
+                    <button class="action-btn" onclick="editProduct(${item.product_id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn" onclick="openAddVariantModal(${item.product_id}, '${item.product_name.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button class="action-btn" onclick="confirmDeleteProduct(${item.product_id}, '${item.product_name.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
             tableBody.appendChild(row);
 
             // Add variant rows if any
@@ -110,40 +114,41 @@ document.addEventListener('DOMContentLoaded', function () {
                 const variantRow = document.createElement('tr');
                 variantRow.id = `variants-${item.product_id}`;
                 variantRow.className = 'variant-row';
-                variantRow.style.display = 'none';
+                // Check if this product was expanded before pagination
+                variantRow.style.display = sessionStorage.getItem(`expanded-${item.product_id}`) === 'true' ? 'table-row' : 'none';
 
-                let variantContent = `<td colspan="9">
-                <table class="variant-table">
-                    <thead>
-                        <tr>
-                            <th>Variant</th>
-                            <th>QTY(packs)</th>
-                            <th>QTY(Sachet)</th>
-                            <th>Price Packet</th>
-                            <th>Price Sachet</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+                let variantContent = `<td colspan="11">
+                    <table class="variant-table">
+                        <thead>
+                            <tr>
+                                <th>Variant</th>
+                                <th>QTY(packs)</th>
+                                <th>QTY(Sachet)</th>
+                                <th>Price Packet</th>
+                                <th>Price Sachet</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
 
                 item.variants.forEach(variant => {
                     variantContent += `
-                    <tr>
-                        <td>${variant.variant_name}</td>
-                        <td>${variant.qty_packet}</td>
-                        <td>${variant.qty_sachet}</td>
-                        <td>${variant.packPrice}</td>
-                        <td>${variant.unitPrice}</td>
-                        
-                        <td>
-                            <button class="action-btn" onclick="openUpdateVariantModal(${variant.variant_id}, '${variant.variant_name}', ${variant.qty_packet}, '${item.product_name}')">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="action-btn" onclick="">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                    </tr>`;
+                        <tr>
+                            <td>${variant.variant_name}</td>
+                            <td>${variant.qty_packet}</td>
+                            <td>${variant.qty_sachet}</td>
+                            <td>${variant.packPrice}</td>
+                            <td>${variant.unitPrice}</td>
+                            
+                            <td>
+                                <button class="action-btn" onclick="editVariant(${variant.variant_id})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="action-btn" onclick="confirmDeleteVariant(${variant.variant_id}, '${variant.variant_name.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>`;
                 });
 
                 variantContent += `</tbody></table></td>`;
@@ -347,5 +352,36 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     `;
     document.head.appendChild(style);
+    
+    // Add toggle variants function to global scope
+    window.toggleVariants = function(productId) {
+        const variantRow = document.getElementById(`variants-${productId}`);
+        const expandBtn = document.getElementById(`expand-${productId}`);
+        
+        if (variantRow.style.display === 'none') {
+            variantRow.style.display = 'table-row';
+            expandBtn.innerHTML = '<i class="fas fa-minus"></i>';
+            
+            // Store expanded state in session storage
+            sessionStorage.setItem(`expanded-${productId}`, 'true');
+        } else {
+            variantRow.style.display = 'none';
+            expandBtn.innerHTML = '<i class="fas fa-plus"></i>';
+            
+            // Remove expanded state from session storage
+            sessionStorage.removeItem(`expanded-${productId}`);
+        }
+    };
+
+    // Clear expanded rows state on page load/reload
+window.addEventListener('load', function() {
+    // Find and clear all expanded state items from sessionStorage
+    Object.keys(sessionStorage).forEach(key => {
+        if (key.startsWith('expanded-')) {
+            sessionStorage.removeItem(key);
+        }
+    });
+});
+
     applyFilters();
 });
