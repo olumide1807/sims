@@ -30,9 +30,7 @@ if (isset($_POST['saveProduct'])) {
     $expiry_alert_days = isset($_POST['expiry_alert_days']) ? trim($_POST['expiry_alert_days']) : '';
 
     // Insert product into the products table
-    $sql = "INSERT INTO products (`product_name`, `category`, `brand`, `batch_number`, `prod_date`, `exp_date`, 
-            `desc`, `cost_price`, `price_per_packet`, `price_per_sachet`, `quantity_packet`, `quantity_per_pack`, 
-            `low_stock_alert`, `expiry_alert_days`) 
+    $sql = "INSERT INTO products (`product_name`, `category`, `brand`, `batch_number`, `prod_date`, `exp_date`, `desc`, `cost_price`, `price_per_packet`, `price_per_sachet`, `quantity_packet`, `quantity_per_pack`, `low_stock_alert`, `expiry_alert_days`) 
             VALUES ('$product_name', '$category', '$brand', '$batch_number', '$prod_date', '$exp_date', 
             '$desc', '$cost_price', '$price_per_packet', '$price_per_sachet', '$quantity_packet', 
             '$quantity_per_pack', '$low_stock_alert', '$expiry_alert_days')";
@@ -48,18 +46,15 @@ if (isset($_POST['saveProduct'])) {
             die(); */
             foreach ($_POST['v'] as $variantId => $variantData) {
                 $variant_name           = isset($variantData['name']) ? mysqli_real_escape_string($connect, $variantData['name']) : '';
-                $variant_price_packet   = isset($variant_name['pricePacket']) ? trim($_POST['pricePacket']) : '';
-                $variant_price_sachet   = isset($variant_name['priceSachet']) ? trim($_POST['priceSachet']) : '';
-                $variant_quantity_packet = isset($variant_name['quantity']) ? trim($_POST['quantity']) : '';
-                $variant_quantity_per_pack = isset($variant_name['qtyInPack']) ? trim($_POST['qtyInPack']) : '';
+                $variant_price_packet   = isset($variantData['pricePacket']) ? trim($variantData['pricePacket']) : '';
+                $variant_price_sachet   = isset($variantData['priceSachet']) ? trim($variantData['priceSachet']) : '';
+                $variant_quantity_packet = isset($variantData['quantity']) ? trim($variantData['quantity']) : '';
+                $variant_quantity_per_pack = isset($variantData['qtyInPack']) ? trim($variantData['qtyInPack']) : '';
 
-                $sql_variant = "INSERT INTO product_variants (product_id, variant_name, price_per_packet, price_per_sachet, quantity_packet, quantity_per_pack) 
+                $sql_variant = "INSERT INTO product_variants (product_id, variant_name, price_per_packet, price_per_sachet, qty_packet, qty_sachet) 
                                 VALUES ('$product_id', '$variant_name', '$variant_price_packet', '$variant_price_sachet', '$variant_quantity_packet', '$variant_quantity_per_pack')";
 
                 mysqli_query($connect, $sql_variant);
-                /* echo $sql_variant;
-                die; */
-
             }
         }
         echo '<div id="alertBox" class="alert alert-success">
