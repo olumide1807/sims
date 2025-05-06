@@ -42,22 +42,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
     $tax_amount = 0;
     $total_amount = 0;
     $sale_date = date('Y-m-d H:i:s');
-    //$customer_id = isset($_POST['customer_id']) ? $_POST['customer_id'] : NULL;
+    // $customer_id = isset($_POST['customer_id']) ? $_POST['customer_id'] : NULL;
+    $payment_method = isset($_POST['payment_method']) ? $_POST['payment_method'] : 'Cash';
+    $payment_reference = isset($_POST['payment_reference']) ? $_POST['payment_reference'] : NULL;
+
+    // Debug output to check if data is coming through (remove in production)
+    error_log("Payment Method: " . $payment_method);
+    error_log("Payment Reference: " . $payment_reference);
 
     // Start transaction
     mysqli_begin_transaction($connect);
     try {
-        // Insert into sales table
-        $sale_query = "INSERT INTO sales (sale_date, subtotal, tax_amount, total_amount, customer_id, created_by) 
-                          VALUES (?, ?, ?, ?, ?, ?)";
-        $stmt = mysqli_prepare($connect, $sale_query); // Fixed: changed $conn to $connect
-
         // Calculate totals based on submitted form data
-        $product_ids = $_POST['product_id'];
+        $product_ids = isset($_POST['product_id']) ? $_POST['product_id'] : [];
         $variant_ids = isset($_POST['variant_id']) ? $_POST['variant_id'] : [];
-        $quantities = $_POST['quantity'];
-        $unit_prices = $_POST['unit_price'];
+        $quantities = isset($_POST['quantity']) ? $_POST['quantity'] : [];
+        $unit_prices = isset($_POST['unit_price']) ? $_POST['unit_price'] : [];
 
+        // Validate that we have product data
+        if (empty($product_ids)) {
+            throw new Exception("No products selected");
+        }
+
+        // Calculate subtotal
         foreach ($product_ids as $index => $product_id) {
             if (empty($product_id)) continue;
 
@@ -70,16 +77,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
         $tax_amount = $subtotal * $tax_rate;
         $total_amount = $subtotal + $tax_amount;
 
-        mysqli_stmt_bind_param($stmt, "sdddii", $sale_date, $subtotal, $tax_amount, $total_amount, $customer_id, $_SESSION['user_id']);
-        mysqli_stmt_execute($stmt);
+        // Insert into sales table
+        $sale_query = "INSERT INTO sales (sale_date, subtotal, tax_amount, total_amount, created_by, payment_method, reference_num) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $stmt = mysqli_prepare($connect, $sale_query);
+
+        if (!$stmt) {
+            throw new Exception("Database prepare error: " . mysqli_error($connect));
+        }
+
+        mysqli_stmt_bind_param($stmt, "sdddiss", $sale_date, $subtotal, $tax_amount, $total_amount, $_SESSION['user_id'], $payment_method, $payment_reference);
+        $result = mysqli_stmt_execute($stmt);
+
+        if (!$result) {
+            throw new Exception("Database execute error: " . mysqli_stmt_error($stmt));
+        }
 
         $sale_id = mysqli_insert_id($connect);
+
+        if (!$sale_id) {
+            throw new Exception("Failed to get sale ID");
+        }
 
         // Insert sale details
         foreach ($product_ids as $index => $product_id) {
             if (empty($product_id)) continue;
 
-            $variant_id = isset($variant_ids[$index]) ? $variant_ids[$index] : NULL;
+            $variant_id = isset($variant_ids[$index]) && !empty($variant_ids[$index]) ? $variant_ids[$index] : NULL;
             $quantity = $quantities[$index];
             $unit_price = $unit_prices[$index];
             $item_total = $quantity * $unit_price;
@@ -87,22 +111,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
             $detail_query = "INSERT INTO sale_details (sale_id, product_id, variant_id, quantity, unit_price, total_price) 
                                 VALUES (?, ?, ?, ?, ?, ?)";
             $detail_stmt = mysqli_prepare($connect, $detail_query);
+
+            if (!$detail_stmt) {
+                throw new Exception("Database prepare error (detail): " . mysqli_error($connect));
+            }
+
             mysqli_stmt_bind_param($detail_stmt, "iiiddd", $sale_id, $product_id, $variant_id, $quantity, $unit_price, $item_total);
-            mysqli_stmt_execute($detail_stmt);
+            $detail_result = mysqli_stmt_execute($detail_stmt);
+
+            if (!$detail_result) {
+                throw new Exception("Database execute error (detail): " . mysqli_stmt_error($detail_stmt));
+            }
 
             // Update inventory quantity
             if ($variant_id) {
                 // Update variant stock
-                $update_query = "UPDATE product_variants SET stock_quantity = stock_quantity - ? WHERE id = ?"; // Fixed: changed variant_id to id
+                $update_query = "UPDATE product_variants SET qty_sachet = qty_sachet - ? WHERE id = ?";
                 $update_stmt = mysqli_prepare($connect, $update_query);
-                mysqli_stmt_bind_param($update_stmt, "ii", $quantity, $variant_id);
+                mysqli_stmt_bind_param($update_stmt, "di", $quantity, $variant_id);
             } else {
                 // Update product stock
-                $update_query = "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?"; // Fixed: changed product_id to id
+                $update_query = "UPDATE products SET quantity_per_pack = quantity_per_pack - ? WHERE id = ?";
                 $update_stmt = mysqli_prepare($connect, $update_query);
-                mysqli_stmt_bind_param($update_stmt, "ii", $quantity, $product_id);
+                mysqli_stmt_bind_param($update_stmt, "di", $quantity, $product_id);
             }
-            mysqli_stmt_execute($update_stmt);
+
+            $update_result = mysqli_stmt_execute($update_stmt);
+
+            if (!$update_result) {
+                throw new Exception("Database execute error (update): " . mysqli_stmt_error($update_stmt));
+            }
         }
 
         // Commit the transaction
@@ -116,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
         // Rollback in case of error
         mysqli_rollback($connect);
         $error_message = "Error recording sale: " . $e->getMessage();
+        error_log("Sale Error: " . $e->getMessage());
     }
 }
 
@@ -134,56 +173,6 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="../style/css/style.css">
-    <style>
-        /* Custom styling for the save sale button */
-        .btn-theme-outline {
-            background-color: #fff;
-            color: #6366f1;
-            /* Base color from the gradient */
-            border: 2px solid #6366f1;
-            position: relative;
-            z-index: 1;
-            transition: all 0.3s ease;
-        }
-
-        .btn-theme-outline:hover,
-        .btn-theme-outline:focus {
-            color: #fff;
-            border-color: transparent;
-        }
-
-        /* Create gradient effect on hover */
-        .btn-theme-outline::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-            z-index: -1;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .btn-theme-outline:hover::before,
-        .btn-theme-outline:focus::before {
-            opacity: 1;
-        }
-
-        /* Alert styling */
-        .alert {
-            border-radius: 8px;
-            margin-bottom: 20px;
-            padding: 12px 16px;
-        }
-
-        /* Variant selector styling */
-        .variant-select {
-            display: none;
-            margin-top: 10px;
-        }
-    </style>
 </head>
 
 <body>
@@ -300,7 +289,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
 
             <!-- Sales Form -->
             <div class="content-card">
-                <form id="salesForm" method="POST">
+                <form id="salesForm" method="POST" action="logsales.php">
                     <!-- Products Section -->
                     <div class="mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1137,18 +1126,61 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                 paymentSuccessModal.show();
             }
 
-            // Finish payment process
+            // Finish payment process handler
             document.getElementById('finishPaymentProcess').addEventListener('click', function() {
                 paymentSuccessModal.hide();
 
-                // Add payment details to the form as hidden fields before submission
-                Object.keys(paymentDetails.additionalFields).forEach(key => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'payment_' + key;
-                    input.value = paymentDetails.additionalFields[key];
-                    salesForm.appendChild(input);
-                });
+                // Remove any existing payment method inputs first
+                const existingMethod = salesForm.querySelector('input[name="payment_method"]');
+                if (existingMethod) {
+                    existingMethod.remove();
+                }
+
+                const existingReference = salesForm.querySelector('input[name="payment_reference"]');
+                if (existingReference) {
+                    existingReference.remove();
+                }
+
+                // Add payment method to the form
+                const methodInput = document.createElement('input');
+                methodInput.type = 'hidden';
+                methodInput.name = 'payment_method';
+                methodInput.value = paymentDetails.method;
+                salesForm.appendChild(methodInput);
+
+                // Generate a unique transaction ID
+                const uniqueId = Date.now().toString() + Math.floor(Math.random() * 1000);
+
+                // Create payment reference from relevant details with unique ID
+                let paymentReference = "TXN-" + uniqueId + ": ";
+
+                /* if (paymentDetails.method === 'Cash') {
+                    paymentReference = `Cash payment: Received ₵${paymentDetails.additionalFields.cashReceived}, Change ₵${paymentDetails.additionalFields.change}`;
+                } else if (paymentDetails.method === 'Mobile Money') {
+                    paymentReference = `${paymentDetails.additionalFields.provider}: ${paymentDetails.additionalFields.phoneNumber}, Ref: ${paymentDetails.additionalFields.reference || 'N/A'}`;
+                } else if (paymentDetails.method === 'PoS') {
+                    paymentReference = `${paymentDetails.additionalFields.cardType}, Ref: ${paymentDetails.additionalFields.reference}`;
+                } else if (paymentDetails.method === 'Bank Transfer') {
+                    paymentReference = `${paymentDetails.additionalFields.bankName}, Ref: ${paymentDetails.additionalFields.reference}`;
+                } */
+
+                // Add payment reference to the form
+                const referenceInput = document.createElement('input');
+                referenceInput.type = 'hidden';
+                referenceInput.name = 'payment_reference';
+                referenceInput.value = paymentReference;
+                salesForm.appendChild(referenceInput);
+
+                // Ensure hidden submit button is created and submit form programmatically
+                const submitBtn = document.createElement('input');
+                submitBtn.type = 'hidden';
+                submitBtn.name = 'save_sale';
+                submitBtn.value = '1';
+                salesForm.appendChild(submitBtn);
+
+                // Log form data before submission (for debugging)
+                console.log("Submitting with payment method:", paymentDetails.method);
+                console.log("Payment reference:", paymentReference);
 
                 // Submit the form
                 salesForm.submit();
