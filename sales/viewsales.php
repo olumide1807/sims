@@ -1,6 +1,34 @@
 <?php
 session_start();
 include "../config/session_check.php";
+include "../config/config.php"; // Make sure you have this file for database connection
+
+// Query to fetch sales data
+$query = "SELECT 
+            s.id,
+            s.transaction_number, 
+            GROUP_CONCAT(p.product_name SEPARATOR ', ') as items,
+            s.subtotal,
+            s.tax_amount,
+            s.total_amount,
+            s.sale_status,
+            s.sale_date
+          FROM 
+            sales s
+          LEFT JOIN 
+            sale_details si ON s.id = si.id
+          LEFT JOIN 
+            products p ON si.product_id = p.id
+          GROUP BY 
+            s.id
+          ORDER BY 
+            s.sale_date DESC";
+
+$result = mysqli_query($connect, $query);
+
+// Get unique categories for the filter
+$categoryQuery = "SELECT DISTINCT category FROM products";
+$categoryResult = mysqli_query($connect, $categoryQuery);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -122,19 +150,17 @@ include "../config/session_check.php";
                         <p class="mb-3">Track and analyze your sales performance</p>
                     </div>
                     <div class="col-md-4 text-md-end">
-                        <button class="btn btn-light rounded-pill px-4 mb-2 mb-md-0">
+                        <button class="btn btn-light rounded-pill px-4 mb-2 mb-md-0" id="exportBtn">
                             <i class="fas fa-download me-2"></i>Export Report
                         </button>
                     </div>
                 </div>
             </div>
 
-            <!-- [Previous stats grid remains the same] -->
-
             <!-- Filter Bar -->
             <div class="filter-bar">
                 <div class="row align-items-center">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="input-group">
                             <span class="input-group-text bg-white border-end-0">
                                 <i class="fas fa-search text-muted"></i>
@@ -142,15 +168,19 @@ include "../config/session_check.php";
                             <input type="text" class="form-control border-start-0" placeholder="Search sales..." id="searchInput">
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <!-- <div class="col-md-3">
                         <select class="form-select" id="categoryFilter">
                             <option value="">All Categories</option>
-                            <option value="electronics">Electronics</option>
-                            <option value="clothing">Clothing</option>
-                            <option value="furniture">Furniture</option>
+                            <?php
+                            if ($categoryResult) {
+                                while ($categoryRow = mysqli_fetch_assoc($categoryResult)) {
+                                    echo "<option value='" . htmlspecialchars($categoryRow['category']) . "'>" . htmlspecialchars($categoryRow['category']) . "</option>";
+                                }
+                            }
+                            ?>
                         </select>
-                    </div>
-                    <div class="col-md-3">
+                    </div> -->
+                    <div class="col-md-4">
                         <select class="form-select" id="statusFilter">
                             <option value="">All Status</option>
                             <option value="completed">Completed</option>
@@ -159,7 +189,7 @@ include "../config/session_check.php";
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <button class="btn btn-primary w-100" onclick="applyFilters()">
+                        <button class="btn btn-primary w-100" id="applyFiltersBtn">
                             Apply Filters
                         </button>
                     </div>
@@ -173,60 +203,83 @@ include "../config/session_check.php";
                         <thead>
                             <tr>
                                 <th>Order ID</th>
-                                <th>Product</th>
-                                <th>Customer</th>
+                                <th>Items</th>
                                 <th>Amount</th>
+                                <th>Tax Amount</th>
+                                <th>Total Amount</th>
                                 <th>Status</th>
                                 <th>Date</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="salesTableBody">
-                            <!-- Table content will be dynamically populated -->
+                            <?php
+                            if ($result && mysqli_num_rows($result) > 0) {
+                                while ($row = mysqli_fetch_assoc($result)) {
+                                    $statusClass = "";
+                                    switch (strtolower($row['sale_status'])) {
+                                        case 'completed':
+                                            $statusClass = "completed";
+                                            break;
+                                        case 'pending':
+                                            $statusClass = "pending";
+                                            break;
+                                        case 'cancelled':
+                                            $statusClass = "cancelled";
+                                            break;
+                                        default:
+                                            $statusClass = "bg-secondary";
+                                    }
+
+                                    // print_r($row);
+
+                                    echo "<tr data-id='" . htmlspecialchars($row['id']) . "' class='sale-row'>";
+                                    echo "<td>" . htmlspecialchars($row['transaction_number']) . "</td>";
+                                    echo "<td>" . htmlspecialchars($row['items']) . "</td>";
+                                    echo "<td>₵" . number_format($row['subtotal'], 2) . "</td>";
+                                    echo "<td>₵" . number_format($row['tax_amount'], 2) . "</td>";
+                                    echo "<td>₵" . number_format($row['total_amount'], 2) . "</td>";
+                                    print_r("<td><span class='status-badge status-" . $statusClass . "'>" . $row['sale_status'] . "</span></td>");
+                                    echo "<td>" . date('M d, Y', strtotime($row['sale_date'])) . "</td>";
+                                    echo "<td>
+                                            <button class='btn btn-sm btn-primary view-details' data-id='" . htmlspecialchars($row['id']) . "'>
+                                                <i class='fas fa-eye'></i>
+                                            </button>
+                                            <button class='btn btn-sm btn-success generate-invoice' data-id='" . htmlspecialchars($row['id']) . "'>
+                                                <i class='fas fa-file-invoice'></i>
+                                            </button>
+                                          </td>";
+                                    echo "</tr>";
+                                }
+                            } else {
+                                echo "<tr><td colspan='8' class='text-center'>No sales data found</td></tr>";
+                            }
+                            ?>
                         </tbody>
                     </table>
                 </div>
             </div>
-
-            <!-- [Previous chart section remains the same] -->
         </div>
     </div>
 
     <!-- View Details Modal -->
     <div class="modal fade" id="viewDetailsModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Order Details</h5>
+                    <h5 class="modal-title">Sale Details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <form id="orderDetailsForm">
-                        <div class="mb-3">
-                            <label class="form-label">Order ID</label>
-                            <input type="text" class="form-control" readonly>
+                <div class="modal-body" id="orderDetails">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Product Details</label>
-                            <input type="text" class="form-control" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Customer Information</label>
-                            <input type="text" class="form-control" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Payment Status</label>
-                            <select class="form-select">
-                                <option value="completed">Completed</option>
-                                <option value="pending">Pending</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                    </form>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" onclick="updateOrderStatus()">Update Status</button>
+                    <!-- <button type="button" class="btn btn-primary" id="updateStatusBtn">Update Status</button> -->
                 </div>
             </div>
         </div>
@@ -234,106 +287,306 @@ include "../config/session_check.php";
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Sample sales data
-        let salesData = [{
-                id: 'ORD-2547',
-                product: 'iPhone 15 Pro',
-                customer: 'John Doe',
-                amount: 1299.99,
-                status: 'completed',
-                date: '2024-02-17',
-                category: 'electronics'
-            },
-            {
-                id: 'ORD-2546',
-                product: 'MacBook Air',
-                customer: 'Jane Smith',
-                amount: 1499.99,
-                status: 'pending',
-                date: '2024-02-17',
-                category: 'electronics'
-            },
-            {
-                id: 'ORD-2545',
-                product: 'AirPods Pro',
-                customer: 'Mike Johnson',
-                amount: 249.99,
-                status: 'cancelled',
-                date: '2024-02-16',
-                category: 'electronics'
+        // Add this JavaScript to your viewsales.php file, replacing the existing functions
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            // const categoryFilter = document.getElementById('categoryFilter');
+            const statusFilter = document.getElementById('statusFilter');
+            const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+            const exportBtn = document.getElementById('exportBtn');
+            const salesRows = document.querySelectorAll('.sale-row');
+
+            // Setup console logger for debugging
+            function debugLog(message) {
+                console.log(`[DEBUG] ${message}`);
             }
-        ];
 
-        // Function to render the sales table
-        function renderSalesTable(data) {
-            const tableBody = document.getElementById('salesTableBody');
-            tableBody.innerHTML = '';
+            // Apply filters function
+            function applyFilters() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const category = categoryFilter.value.toLowerCase();
+                const status = statusFilter.value.toLowerCase();
 
-            data.forEach(item => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${item.id}</td>
-                    <td>${item.product}</td>
-                    <td>${item.customer}</td>
-                    <td>$${item.amount.toFixed(2)}</td>
-                    <td><span class="status-badge status-${item.status}">${formatStatus(item.status)}</span></td>
-                    <td>${item.date}</td>
-                    <td>
-                        <button class="action-btn" onclick="viewDetails('${item.id}')">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="action-btn" onclick="generateInvoice('${item.id}')">
-                            <i class="fas fa-file-invoice"></i>
-                        </button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
+                salesRows.forEach(row => {
+                    let showRow = true;
+
+                    // Search term filter
+                    if (searchTerm) {
+                        const rowText = row.textContent.toLowerCase();
+                        if (!rowText.includes(searchTerm)) {
+                            showRow = false;
+                        }
+                    }
+
+                    // Status filter
+                    if (status && showRow) {
+                        const statusCell = row.querySelector('td:nth-child(6)').textContent.toLowerCase();
+                        if (!statusCell.includes(status)) {
+                            showRow = false;
+                        }
+                    }
+
+                    // Display row based on filters
+                    row.style.display = showRow ? '' : 'none';
+                });
+            }
+
+            // Event listeners
+            if (applyFiltersBtn) {
+                applyFiltersBtn.addEventListener('click', applyFilters);
+            }
+
+            // Search on keyup
+            if (searchInput) {
+                searchInput.addEventListener('keyup', function(e) {
+                    if (e.key === 'Enter') {
+                        applyFilters();
+                    }
+                });
+            }
+
+            // Setup view details buttons
+            document.querySelectorAll('.view-details').forEach(button => {
+                button.addEventListener('click', function() {
+                    const saleId = this.getAttribute('data-id');
+                    // debugLog(`View details clicked for sale ID: ${saleId}`);
+                    viewSaleDetails(saleId);
+                });
             });
+
+            // Setup generate invoice buttons
+            document.querySelectorAll('.generate-invoice').forEach(button => {
+                button.addEventListener('click', function() {
+                    const saleId = this.getAttribute('data-id');
+                    generateInvoice(saleId);
+                });
+            });
+
+            // Setup export button
+            if (exportBtn) {
+                exportBtn.addEventListener('click', function() {
+                    exportSalesReport();
+                });
+            }
+
+            /* // Setup update status button
+            const updateStatusBtn = document.getElementById('updateStatusBtn');
+            if (updateStatusBtn) {
+                updateStatusBtn.addEventListener('click', function() {
+                    debugLog('Update status button clicked');
+                    updateOrderStatus();
+                });
+            } */
+        });
+
+        // View sale details
+        function viewSaleDetails(saleId) {
+            const detailsContainer = document.getElementById('orderDetails');
+
+            // console.log(`Fetching details for sale ID: ${saleId}`);
+
+            // Show loading spinner
+            detailsContainer.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            `;
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('viewDetailsModal'));
+            modal.show();
+
+            // Create a unique timestamp to prevent caching
+            const timestamp = new Date().getTime();
+
+            // Fetch sale details via AJAX
+            fetch(`get_sale_details.php?id=${saleId}&_=${timestamp}`)
+                .then(response => {
+                    // console.log('Response status:', response.status);
+                    return response.text();
+                })
+                .then(text => {
+                    // console.log('Raw response:', text);
+                    try {
+                        return JSON.parse(text);
+                    } catch (error) {
+                        throw new Error(`Failed to parse JSON: ${error.message}\nResponse: ${text}`);
+                    }
+                })
+                .then(data => {
+                    console.log('Parsed data:', data);
+
+                    /* // Store debug info if available
+                    if (data.debug_info) {
+                        console.log('Debug info:', data.debug_info);
+                    } */
+
+                    if (data.success) {
+                        displaySaleDetails(data.sale, detailsContainer);
+                        // Store the sale ID for status update
+                        // document.getElementById('updateStatusBtn').setAttribute('data-sale-id', saleId);
+                    } else {
+                        detailsContainer.innerHTML = `<div class="alert alert-danger">Error: ${data.message}</div>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    detailsContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5>Error loading sale details</h5>
+                        </div>
+                    `;
+                });
         }
 
-        // Format status text
-        function formatStatus(status) {
-            return status.charAt(0).toUpperCase() + status.slice(1);
+        // Display sale details in modal with table format
+        function displaySaleDetails(sale, container) {
+            // console.log('Displaying sale details:', sale);
+
+            // Handle potentially missing data
+            if (!sale) {
+                container.innerHTML = `<div class="alert alert-danger">Error: Invalid sale data received</div>`;
+                return;
+            }
+
+            // Create status options
+            let statusOptions = '';
+            const currentStatus = (sale.status || '').toLowerCase();
+            // console.log('Current status:', currentStatus);
+
+            ['Completed', 'Pending', 'Cancelled'].forEach(status => {
+                const selected = status.toLowerCase() === currentStatus ? 'selected' : '';
+                statusOptions += `<option value="${status.toLowerCase()}" ${selected}>${status}</option>`;
+            });
+
+            // Create sale information table
+            const saleInfoTable = `
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th style="width: 30%">Order ID</th>
+                                <td>${sale.transaction_number || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>${sale.status}</td>
+                            </tr>
+                            <tr>
+                                <th>Payment Method</th>
+                                <td>${sale.payment_method || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <th>Date</th>
+                                <td>${sale.formatted_date || 'N/A'}</td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>`;
+
+            // Format items in table
+            let itemsTable = '';
+            if (sale.items && Array.isArray(sale.items) && sale.items.length > 0) {
+                let itemRows = '';
+                let itemTotal = 0;
+
+                // Loop through each item to create rows
+                sale.items.forEach((item, index) => {
+                    const quantity = parseInt(item.quantity) || 0;
+                    const price = parseFloat(item.unit_price) || 0;
+                    const rowTotal = quantity * price;
+                    itemTotal += rowTotal;
+
+                    itemRows += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${item.product_name || 'Unknown Product'}</td>
+                            <td class="text-center">${quantity}</td>
+                            <td class="text-end">₵${price.toFixed(2)}</td>
+                            <td class="text-end">₵${rowTotal.toFixed(2)}</td>
+                        </tr>`;
+                });
+
+                itemsTable = `
+                    <h6 class="mt-4 mb-3">Items</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemRows}
+                            </tbody>
+                        </table>
+                    </div>`;
+            } else {
+                itemsTable = `<div class="alert alert-info mt-3">No items found for this sale.</div>`;
+            }
+
+            // Summary table
+            const summaryTable = `
+                <h6 class="mt-4 mb-3">Summary</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th style="width: 30%">Subtotal</th>
+                                <td>$${parseFloat(sale.amount || 0).toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <th>Tax</th>
+                                <td>$${parseFloat(sale.tax_amount || 0).toFixed(2)}</td>
+                            </tr>
+                            <tr class="table-primary">
+                                <th>Total</th>
+                                <td><strong>$${parseFloat(sale.total_amount || 0).toFixed(2)}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>`;
+
+            // Format the container HTML
+            container.innerHTML = `
+                <form id="orderDetailsForm">
+                    <div class="order-details">
+                        ${saleInfoTable}
+                        ${itemsTable}
+                        ${summaryTable}
+                    </div>
+                </form>`;
         }
 
-        // Filter functions
-        function applyFilters() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        // Generate invoice
+        function generateInvoice(saleId) {
+            console.log(`Generating invoice for sale ID: ${saleId}`);
+            window.location.href = `generate_invoice.php?id=${saleId}`;
+        }
+
+        // Export sales report
+        function exportSalesReport() {
+            // Filter criteria
+            const searchTerm = document.getElementById('searchInput').value;
             const category = document.getElementById('categoryFilter').value;
             const status = document.getElementById('statusFilter').value;
 
-            const filteredData = salesData.filter(item => {
-                const matchesSearch = item.product.toLowerCase().includes(searchTerm) ||
-                    item.customer.toLowerCase().includes(searchTerm) ||
-                    item.id.toLowerCase().includes(searchTerm);
-                const matchesCategory = !category || item.category === category;
-                const matchesStatus = !status || item.status === status;
-                return matchesSearch && matchesCategory && matchesStatus;
+            console.log('Exporting sales report with filters:', {
+                searchTerm,
+                category,
+                status
             });
 
-            renderSalesTable(filteredData);
-        }
-
-        // View details function
-        function viewDetails(id) {
-            const sale = salesData.find(item => item.id === id);
-            if (sale) {
-                const form = document.getElementById('orderDetailsForm');
-                form.querySelector('input[readonly]').value = sale.id;
-                const modal = new bootstrap.Modal(document.getElementById('viewDetailsModal'));
-                modal.show();
-            }
-        }
-
-        // Generate invoice function
-        function generateInvoice(id) {
-            alert(`Generating invoice for order ${id}`);
-        }
-
-        // Update order status function
-        function updateOrderStatus() {
-            alert('Order status updated successfully!');
-            document.querySelector('#viewDetailsModal').querySelector('.btn-close').click();
+            // Redirect to export script with filters
+            window.location.href = `export_sales.php?search=${encodeURIComponent(searchTerm)}&category=${encodeURIComponent(category)}&status=${encodeURIComponent(status)}`;
         }
 
         // Sidebar toggle function
@@ -355,21 +608,7 @@ include "../config/session_check.php";
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('show');
         }
-
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
-            const mobileToggle = document.querySelector('.mobile-menu-toggle');
-
-            if (window.innerWidth <= 768) {
-                if (!sidebar.contains(event.target) && !mobileToggle.contains(event.target)) {
-                    sidebar.classList.remove('show');
-                }
-            }
-        });
-
-        // Initial render
-        renderSalesTable(salesData);
     </script>
 </body>
+
 </html>

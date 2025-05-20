@@ -35,10 +35,22 @@ if ($result) {
 }
 
 // Process form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Check which button was clicked to determine the sale status
+    if (isset($_POST['save_sale'])) {
+        $sale_status = 'Completed';
+    } elseif (isset($_POST['pend_sale'])) {
+        $sale_status = 'Pending';
+    } elseif (isset($_POST['cancel_sale'])) {
+        $sale_status = 'Canceled';
+    } else {
+        // Not a recognized sale submission
+        exit;
+    }
+
     // Initialize sale variables
     $subtotal = 0;
-    $tax_rate = 0.10; // 10% tax rate
+    $tax_rate = 0.02; // 2% tax rate
     $tax_amount = 0;
     $total_amount = 0;
     $sale_date = date('Y-m-d H:i:s');
@@ -47,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
     $payment_reference = isset($_POST['payment_reference']) ? $_POST['payment_reference'] : NULL;
 
     // Debug output to check if data is coming through (remove in production)
+    error_log("Sale Status: " . $sale_status);
     error_log("Payment Method: " . $payment_method);
     error_log("Payment Reference: " . $payment_reference);
 
@@ -78,15 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
         $total_amount = $subtotal + $tax_amount;
 
         // Insert into sales table
-        $sale_query = "INSERT INTO sales (sale_date, subtotal, tax_amount, total_amount, created_by, payment_method, reference_num) 
-                          VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $sale_query = "INSERT INTO sales (sale_date, subtotal, tax_amount, total_amount, created_by, payment_method, transaction_number, sale_status) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = mysqli_prepare($connect, $sale_query);
 
         if (!$stmt) {
             throw new Exception("Database prepare error: " . mysqli_error($connect));
         }
 
-        mysqli_stmt_bind_param($stmt, "sdddiss", $sale_date, $subtotal, $tax_amount, $total_amount, $_SESSION['user_id'], $payment_method, $payment_reference);
+        mysqli_stmt_bind_param($stmt, "sdddisss", $sale_date, $subtotal, $tax_amount, $total_amount, $_SESSION['user_id'], $payment_method, $payment_reference, $sale_status);
         $result = mysqli_stmt_execute($stmt);
 
         if (!$result) {
@@ -122,33 +135,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
             if (!$detail_result) {
                 throw new Exception("Database execute error (detail): " . mysqli_stmt_error($detail_stmt));
             }
+        }
 
-            // Update inventory quantity
-            if ($variant_id) {
-                // Update variant stock
-                $update_query = "UPDATE product_variants SET qty_sachet = qty_sachet - ? WHERE id = ?";
-                $update_stmt = mysqli_prepare($connect, $update_query);
-                mysqli_stmt_bind_param($update_stmt, "di", $quantity, $variant_id);
-            } else {
-                // Update product stock
-                $update_query = "UPDATE products SET quantity_per_pack = quantity_per_pack - ? WHERE id = ?";
-                $update_stmt = mysqli_prepare($connect, $update_query);
-                mysqli_stmt_bind_param($update_stmt, "di", $quantity, $product_id);
-            }
+        // Only update inventory if sale is completed (not pending or canceled)
+        if ($sale_status === 'Completed') {
+            foreach ($product_ids as $index => $product_id) {
+                if (empty($product_id)) continue;
 
-            $update_result = mysqli_stmt_execute($update_stmt);
+                $variant_id = isset($variant_ids[$index]) && !empty($variant_ids[$index]) ? $variant_ids[$index] : NULL;
+                $quantity = $quantities[$index];
 
-            if (!$update_result) {
-                throw new Exception("Database execute error (update): " . mysqli_stmt_error($update_stmt));
+                // Update inventory quantity
+                if ($variant_id) {
+                    // Update variant stock
+                    $update_query = "UPDATE product_variants SET qty_sachet = qty_sachet - ? WHERE id = ?";
+                    $update_stmt = mysqli_prepare($connect, $update_query);
+                    mysqli_stmt_bind_param($update_stmt, "di", $quantity, $variant_id);
+                } else {
+                    // Update product stock
+                    $update_query = "UPDATE products SET quantity_per_pack = quantity_per_pack - ? WHERE id = ?";
+                    $update_stmt = mysqli_prepare($connect, $update_query);
+                    mysqli_stmt_bind_param($update_stmt, "di", $quantity, $product_id);
+                }
+
+                $update_result = mysqli_stmt_execute($update_stmt);
+
+                if (!$update_result) {
+                    throw new Exception("Database execute error (update): " . mysqli_stmt_error($update_stmt));
+                }
             }
         }
 
         // Commit the transaction
         mysqli_commit($connect);
-        $success_message = "Sale has been successfully recorded!";
+
+        // Set appropriate success message based on sale status
+        if ($sale_status === 'Completed') {
+            $success_message = "Sale has been successfully recorded!";
+        } elseif ($sale_status === 'Pending') {
+            $success_message = "Sale has been saved as pending!";
+        } else {
+            $success_message = "Sale has been canceled!";
+        }
 
         // Redirect to prevent form resubmission
-        header("Location: logsales.php?success=1");
+        header("Location: logsales.php?success=1&status=" . urlencode($sale_status));
         exit;
     } catch (Exception $e) {
         // Rollback in case of error
@@ -160,7 +191,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_sale'])) {
 
 // Check for success message from redirect
 if (isset($_GET['success']) && $_GET['success'] == '1') {
-    $success_message = "Sale has been successfully recorded!";
+    $status = isset($_GET['status']) ? $_GET['status'] : 'Completed';
+
+    if ($status === 'Completed') {
+        $success_message = "Sale has been successfully recorded!";
+    } elseif ($status === 'Pending') {
+        $success_message = "Sale has been successfully saved as pending!";
+    } elseif ($status === 'Canceled') {
+        $success_message = "Sale has been canceled!";
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -264,8 +303,8 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
             <div class="header">
                 <h4 class="mb-0">Log New Sale</h4>
                 <div class="d-flex gap-3">
-                    <button class="btn btn-outline-secondary" onclick="window.location.href='viewsales.php'">
-                        <i class="fas fa-clock me-2"></i>Recent Sales
+                    <button class="btn btn-outline-secondary">
+                        <i class="fas fa-clock me-2"></i>View Pending
                     </button>
                 </div>
             </div>
@@ -500,7 +539,8 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     </div>
                 </div>
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" id="cancelSale" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="pendSale">Pend Sale</button>
                     <button type="button" class="btn btn-primary" id="completeCashPayment" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);" disabled>
                         Complete Payment
                     </button>
@@ -544,7 +584,8 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     </div>
                 </div>
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" id="cancelSale" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="pendSale">Pend Sale</button>
                     <button type="button" class="btn btn-primary" id="completeMobileMoneyPayment" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
                         Complete Payment
                     </button>
@@ -583,7 +624,8 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     </div>
                 </div>
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" id="cancelSale" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="pendSale">Pend Sale</button>
                     <button type="button" class="btn btn-primary" id="completePosPayment" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
                         Complete Payment
                     </button>
@@ -621,7 +663,8 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     </div>
                 </div>
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" id="cancelSale" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="pendSale">Pend Sale</button>
                     <button type="button" class="btn btn-primary" id="completeBankTransferPayment" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
                         Complete Payment
                     </button>
@@ -816,7 +859,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
 
         function updateSummary() {
             let subtotal = 0;
-            const taxRate = 0.10; // 10% tax rate
+            const taxRate = 0.05; // 10% tax rate
 
             // Calculate subtotal from all products
             document.querySelectorAll('.item-total').forEach(input => {
@@ -898,10 +941,10 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
             const posPaymentModal = new bootstrap.Modal(document.getElementById('posPaymentModal'));
             const bankTransferModal = new bootstrap.Modal(document.getElementById('bankTransferModal'));
             const paymentSuccessModal = new bootstrap.Modal(document.getElementById('paymentSuccessModal'));
-
             const continueButton = document.getElementById('continueWithPayment');
             const paymentOptions = document.querySelectorAll('.payment-option');
             const selectedPaymentInput = document.getElementById('selectedPaymentMethod');
+            const pendSaleButtons = document.querySelectorAll('button#pendSale');
 
             // Store payment details
             let paymentDetails = {
@@ -981,6 +1024,56 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     paymentMethodModal.show();
                 });
             }
+
+            pendSaleButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Close all modals
+                    const modals = ['cashPaymentModal', 'mobileMoneyModal', 'posPaymentModal', 'bankTransferModal'];
+                    modals.forEach(modalId => {
+                        const modalElement = document.getElementById(modalId);
+                        if (modalElement) {
+                            const bsModal = bootstrap.Modal.getInstance(modalElement);
+                            if (bsModal) {
+                                bsModal.hide();
+                            }
+                        }
+                    });
+
+                    // Get the form
+                    const salesForm = document.getElementById('salesForm');
+
+                    // Remove any existing buttons/inputs that might affect submission type
+                    const existingBtn = salesForm.querySelector('input[name="pend_sale"]');
+                    if (existingBtn) {
+                        existingBtn.remove();
+                    }
+
+                    // Add payment method to the form
+                    const methodInput = document.createElement('input');
+                    methodInput.type = 'hidden';
+                    methodInput.name = 'payment_method';
+                    methodInput.value = document.getElementById('selectedPaymentMethod').value;
+                    salesForm.appendChild(methodInput);
+
+                    // Create a unique reference for the pending sale
+                    const uniqueId = "PENDING-" + Date.now().toString();
+                    const referenceInput = document.createElement('input');
+                    referenceInput.type = 'hidden';
+                    referenceInput.name = 'payment_reference';
+                    referenceInput.value = uniqueId;
+                    salesForm.appendChild(referenceInput);
+
+                    // Create the pend_sale button/input
+                    const pendBtn = document.createElement('input');
+                    pendBtn.type = 'hidden';
+                    pendBtn.name = 'pend_sale';
+                    pendBtn.value = '1';
+                    salesForm.appendChild(pendBtn);
+
+                    // Submit the form with pending status
+                    salesForm.submit();
+                });
+            });
 
             // Handle cash payment
             const cashReceivedInput = document.getElementById('cashReceived');
