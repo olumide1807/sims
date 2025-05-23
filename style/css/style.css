@@ -260,7 +260,7 @@ body {
 }
 
 .status-in-stock,
-.status-Completed {
+.status-completed {
     background-color: #dcfce7;
     color: #166534;
 }

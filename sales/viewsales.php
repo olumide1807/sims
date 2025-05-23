@@ -7,7 +7,7 @@ include "../config/config.php"; // Make sure you have this file for database con
 $query = "SELECT 
             s.id,
             s.transaction_number, 
-            GROUP_CONCAT(p.product_name SEPARATOR ', ') as items,
+            COUNT(DISTINCT si.product_id) as item_count,
             s.subtotal,
             s.tax_amount,
             s.total_amount,
@@ -16,7 +16,7 @@ $query = "SELECT
           FROM 
             sales s
           LEFT JOIN 
-            sale_details si ON s.id = si.id
+            sale_details si ON s.id = si.sale_id
           LEFT JOIN 
             products p ON si.product_id = p.id
           GROUP BY 
@@ -231,11 +231,9 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
                                             $statusClass = "bg-secondary";
                                     }
 
-                                    // print_r($row);
-
                                     echo "<tr data-id='" . htmlspecialchars($row['id']) . "' class='sale-row'>";
                                     echo "<td>" . htmlspecialchars($row['transaction_number']) . "</td>";
-                                    echo "<td>" . htmlspecialchars($row['items']) . "</td>";
+                                    echo "<td>" . htmlspecialchars($row['item_count']) . "</td>";
                                     echo "<td>₵" . number_format($row['subtotal'], 2) . "</td>";
                                     echo "<td>₵" . number_format($row['tax_amount'], 2) . "</td>";
                                     echo "<td>₵" . number_format($row['total_amount'], 2) . "</td>";
@@ -287,8 +285,6 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Add this JavaScript to your viewsales.php file, replacing the existing functions
-
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('searchInput');
             // const categoryFilter = document.getElementById('categoryFilter');
@@ -305,7 +301,7 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
             // Apply filters function
             function applyFilters() {
                 const searchTerm = searchInput.value.toLowerCase();
-                const category = categoryFilter.value.toLowerCase();
+                // const category = categoryFilter.value.toLowerCase();
                 const status = statusFilter.value.toLowerCase();
 
                 salesRows.forEach(row => {
@@ -506,8 +502,8 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
                             <td>${index + 1}</td>
                             <td>${item.product_name || 'Unknown Product'}</td>
                             <td class="text-center">${quantity}</td>
-                            <td class="text-end">₵${price.toFixed(2)}</td>
-                            <td class="text-end">₵${rowTotal.toFixed(2)}</td>
+                            <td class="text-center">₵${price.toFixed(2)}</td>
+                            <td class="text-center">₵${rowTotal.toFixed(2)}</td>
                         </tr>`;
                 });
 
@@ -519,9 +515,9 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
                                 <tr>
                                     <th>#</th>
                                     <th>Product</th>
-                                    <th>Quantity</th>
-                                    <th>Price</th>
-                                    <th>Total</th>
+                                    <th class="text-center">Quantity</th>
+                                    <th class="text-center">Price</th>
+                                    <th class="text-center">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -576,17 +572,17 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
         function exportSalesReport() {
             // Filter criteria
             const searchTerm = document.getElementById('searchInput').value;
-            const category = document.getElementById('categoryFilter').value;
+            // const category = document.getElementById('categoryFilter').value;
             const status = document.getElementById('statusFilter').value;
 
             console.log('Exporting sales report with filters:', {
                 searchTerm,
-                category,
+                // category,
                 status
             });
 
             // Redirect to export script with filters
-            window.location.href = `export_sales.php?search=${encodeURIComponent(searchTerm)}&category=${encodeURIComponent(category)}&status=${encodeURIComponent(status)}`;
+            window.location.href = `export_sales.php?search=${encodeURIComponent(searchTerm)}&status=${encodeURIComponent(status)}`;
         }
 
         // Sidebar toggle function

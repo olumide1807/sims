@@ -34,6 +34,162 @@ if ($result) {
     }
 }
 
+// Fetch pending sales
+$pending_sales = [];
+$pending_query = "SELECT 
+                    s.id,
+                    s.transaction_number,
+                    s.payment_method,
+                    s.subtotal,
+                    s.tax_amount,
+                    s.total_amount,
+                    s.sale_date,
+                    s.created_by,
+                    CONCAT(u.firstname, ' ', u.lastname) as created_by_name
+                  FROM 
+                    sales s
+                  LEFT JOIN 
+                    users u ON s.created_by = u.user_id
+                  WHERE 
+                    s.sale_status = 'Pending'
+                  ORDER BY 
+                    s.sale_date DESC";
+
+$pending_result = mysqli_query($connect, $pending_query);
+
+if ($pending_result && mysqli_num_rows($pending_result) > 0) {
+    while ($pending_sale = mysqli_fetch_assoc($pending_result)) {
+        $sale_id = $pending_sale['id'];
+
+        // Fetch sale details for each pending sale
+        $details_query = "SELECT 
+                            sd.quantity,
+                            sd.unit_price,
+                            sd.total_price,
+                            p.product_name,
+                            pv.variant_name
+                          FROM 
+                            sale_details sd
+                          LEFT JOIN 
+                            products p ON sd.product_id = p.id
+                          LEFT JOIN 
+                            product_variants pv ON sd.variant_id = pv.id
+                          WHERE 
+                            sd.sale_id = '$sale_id'";
+
+        $details_result = mysqli_query($connect, $details_query);
+        $sale_details = [];
+
+        if ($details_result && mysqli_num_rows($details_result) > 0) {
+            while ($detail = mysqli_fetch_assoc($details_result)) {
+                $sale_details[] = $detail;
+            }
+        }
+
+        $pending_sale['details'] = $sale_details;
+        $pending_sale['created_by'] = $pending_sale['created_by_name'] ?: 'Unknown';
+        $pending_sales[] = $pending_sale;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && isset($_POST['sale_id'])) {
+    $sale_id = mysqli_real_escape_string($connect, $_POST['sale_id']);
+    $action = $_POST['action'];
+
+    error_log("Processing pending sale action: " . $action . " for sale ID: " . $sale_id);
+
+    mysqli_begin_transaction($connect);
+    try {
+        if ($action === 'complete') {
+            // Update sale status to completed
+            $update_query = "UPDATE sales SET 
+                            sale_status = 'Completed',
+                            transaction_number = REPLACE(transaction_number, 'PND-', 'TXN-') 
+                            WHERE id = ? AND sale_status = 'Pending'";
+            $stmt = mysqli_prepare($connect, $update_query);
+            mysqli_stmt_bind_param($stmt, "i", $sale_id);
+            $result = mysqli_stmt_execute($stmt);
+
+            if (!$result) {
+                throw new Exception('Failed to update sale status');
+            }
+
+            // Check if any rows were affected
+            if (mysqli_stmt_affected_rows($stmt) == 0) {
+                throw new Exception('Sale not found or not in pending status');
+            }
+
+            // Get sale details to update inventory
+            $details_query = "SELECT product_id, variant_id, quantity FROM sale_details WHERE sale_id = ?";
+            $details_stmt = mysqli_prepare($connect, $details_query);
+            mysqli_stmt_bind_param($details_stmt, "i", $sale_id);
+            mysqli_stmt_execute($details_stmt);
+            $details_result = mysqli_stmt_get_result($details_stmt);
+
+            // Update inventory for each product
+            while ($detail = mysqli_fetch_assoc($details_result)) {
+                $product_id = $detail['product_id'];
+                $variant_id = $detail['variant_id'];
+                $quantity = $detail['quantity'];
+
+                if ($variant_id) {
+                    // Update variant stock
+                    $update_inventory = "UPDATE product_variants SET qty_sachet = qty_sachet - ? WHERE id = ?";
+                    $inventory_stmt = mysqli_prepare($connect, $update_inventory);
+                    mysqli_stmt_bind_param($inventory_stmt, "di", $quantity, $variant_id);
+                } else {
+                    // Update product stock
+                    $update_inventory = "UPDATE products SET quantity_per_pack = quantity_per_pack - ? WHERE id = ?";
+                    $inventory_stmt = mysqli_prepare($connect, $update_inventory);
+                    mysqli_stmt_bind_param($inventory_stmt, "di", $quantity, $product_id);
+                }
+
+                $inventory_result = mysqli_stmt_execute($inventory_stmt);
+                if (!$inventory_result) {
+                    throw new Exception('Failed to update inventory for item');
+                }
+            }
+
+            mysqli_commit($connect);
+            $success_message = "Sale has been completed successfully!";
+        } elseif ($action === 'cancel') {
+            // Update sale status to canceled
+            $update_query = "UPDATE sales SET 
+                            sale_status = 'Cancelled',
+                            transaction_number = REPLACE(transaction_number, 'PND-', 'CNL-')
+                            WHERE id = ? AND sale_status = 'Pending'";
+            $stmt = mysqli_prepare($connect, $update_query);
+            mysqli_stmt_bind_param($stmt, "i", $sale_id);
+            $result = mysqli_stmt_execute($stmt);
+
+            if (!$result) {
+                throw new Exception('Failed to cancel sale');
+            }
+
+            // Check if any rows were affected
+            if (mysqli_stmt_affected_rows($stmt) == 0) {
+                throw new Exception('Sale not found or not in pending status');
+            }
+
+            mysqli_commit($connect);
+            $success_message = "Sale has been canceled successfully!";
+        }
+
+        // Redirect to prevent form resubmission
+        header("Location: logsales.php?success=1&message=" . urlencode($success_message));
+        exit;
+    } catch (Exception $e) {
+        mysqli_rollback($connect);
+        $error_message = "Error processing sale: " . $e->getMessage();
+        error_log("Process Sale Error: " . $e->getMessage());
+    }
+}
+
+// Check for success message from pending sale actions
+if (isset($_GET['message'])) {
+    $success_message = $_GET['message'];
+}
+
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Check which button was clicked to determine the sale status
@@ -42,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } elseif (isset($_POST['pend_sale'])) {
         $sale_status = 'Pending';
     } elseif (isset($_POST['cancel_sale'])) {
-        $sale_status = 'Canceled';
+        $sale_status = 'Cancelled';
     } else {
         // Not a recognized sale submission
         exit;
@@ -431,7 +587,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         </div>
     </div>
 
-    <!-- Add this modal HTML code before the closing body tag -->
+    <!-- Payment Method Modal -->
     <div class="modal fade" id="paymentMethodModal" tabindex="-1" aria-labelledby="paymentMethodModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -508,7 +664,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         </div>
     </div>
 
-    <!-- Add these additional screens after the payment modal -->
+    <!-- Cash Screen -->
     <div class="modal fade" id="cashPaymentModal" tabindex="-1" aria-labelledby="cashPaymentModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -549,6 +705,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         </div>
     </div>
 
+    <!-- MoMo Screen -->
     <div class="modal fade" id="mobileMoneyModal" tabindex="-1" aria-labelledby="mobileMoneyModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -594,6 +751,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         </div>
     </div>
 
+    <!-- POS Screen -->
     <div class="modal fade" id="posPaymentModal" tabindex="-1" aria-labelledby="posPaymentModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -634,6 +792,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         </div>
     </div>
 
+    <!-- Bank Transfer Screen -->
     <div class="modal fade" id="bankTransferModal" tabindex="-1" aria-labelledby="bankTransferModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -699,10 +858,106 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         </div>
     </div>
 
+    <!-- Pending Sales Modal -->
+    <div class="modal fade" id="pendingSalesModal" tabindex="-1" aria-labelledby="pendingSalesModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pendingSalesModalLabel">Pending Sales</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <?php if (empty($pending_sales)): ?>
+                        <div class="text-center py-5">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <h5>No pending sales found</h5>
+                            <p class="text-muted">All sales have been completed or canceled.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">S/N</th>
+                                        <th class="text-center">Transaction ID</th>
+                                        <th class="text-center">Items</th>
+                                        <th class="text-center">Amount</th>
+                                        <th class="text-center">Payment Method</th>
+                                        <th class="text-center">Created By</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php $counter = 1; ?>
+                                    <?php foreach ($pending_sales as $sale): ?>
+                                        <tr>
+                                            <td class="text-center"><?php echo $counter++; ?></td>
+                                            <!-- <td><?php echo date('M d, Y h:i A', strtotime($sale['sale_date'])); ?></td> -->
+                                            <td><?php echo $sale['transaction_number']; ?></td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-link view-details-btn"
+                                                    data-sale-id="<?php echo $sale['id']; ?>">
+                                                    View <?php echo count($sale['details']); ?> items
+                                                </button>
+                                            </td>
+                                            <td class="text-center">₵<?php echo number_format($sale['total_amount'], 2); ?></td>
+                                            <td class="text-center"><?php echo $sale['payment_method']; ?></td>
+                                            <td class="text-center"><?php echo $sale['created_by']; ?></td>
+                                            <td class="text-center">
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button type="button" class="btn btn-outline-success complete-sale-btn"
+                                                        data-sale-id="<?php echo $sale['id']; ?>">
+                                                        <i class="fas fa-check"></i> Complete
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger cancel-sale-btn"
+                                                        data-sale-id="<?php echo $sale['id']; ?>">
+                                                        <i class="fas fa-times"></i> Cancel
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sale Details Modal -->
+    <div class="modal fade" id="saleDetailsModal" tabindex="-1" aria-labelledby="saleDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="saleDetailsModalLabel">Sale Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="saleDetailsContent">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Process Sale Status Form -->
+    <form id="processSaleForm" method="POST" action="logsales.php" style="display: none;">
+        <input type="hidden" name="sale_id" id="processSaleId">
+        <input type="hidden" name="action" id="processSaleAction">
+    </form>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script>
         // Store products data with variants from PHP to JavaScript
         const productsData = <?php echo json_encode($products); ?>;
+        let paymentMethodModal, cashPaymentModal, mobileMoneyModal, posPaymentModal, bankTransferModal, paymentSuccessModal;
 
         function toggleSubmenu(id) {
             const submenu = document.getElementById(id);
@@ -931,6 +1186,43 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
             updateSummary();
         });
 
+        function updateAmountDisplays(amount) {
+            document.getElementById('cashAmountDue').textContent = '₵' + amount.toFixed(2);
+            document.getElementById('mobileMoneyAmountDue').textContent = '₵' + amount.toFixed(2);
+            document.getElementById('posAmountDue').textContent = '₵' + amount.toFixed(2);
+            document.getElementById('bankTransferAmountDue').textContent = '₵' + amount.toFixed(2);
+        }
+
+        function showPaymentModalForMethod(paymentMethod) {
+            // Initialize modals if not already done
+            if (!cashPaymentModal) {
+                paymentMethodModal = new bootstrap.Modal(document.getElementById('paymentMethodModal'));
+                cashPaymentModal = new bootstrap.Modal(document.getElementById('cashPaymentModal'));
+                mobileMoneyModal = new bootstrap.Modal(document.getElementById('mobileMoneyModal'));
+                posPaymentModal = new bootstrap.Modal(document.getElementById('posPaymentModal'));
+                bankTransferModal = new bootstrap.Modal(document.getElementById('bankTransferModal'));
+                paymentSuccessModal = new bootstrap.Modal(document.getElementById('paymentSuccessModal'));
+            }
+
+            switch (paymentMethod) {
+                case 'Cash':
+                    cashPaymentModal.show();
+                    break;
+                case 'Mobile Money':
+                    mobileMoneyModal.show();
+                    break;
+                case 'PoS':
+                    posPaymentModal.show();
+                    break;
+                case 'Bank Transfer':
+                    bankTransferModal.show();
+                    break;
+                default:
+                    paymentMethodModal.show();
+                    break;
+            }
+        }
+
         // Update your form submission logic
         document.addEventListener('DOMContentLoaded', function() {
             const salesForm = document.getElementById('salesForm');
@@ -946,26 +1238,51 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
             const selectedPaymentInput = document.getElementById('selectedPaymentMethod');
             const pendSaleButtons = document.querySelectorAll('button#pendSale');
 
-            // Store payment details
-            let paymentDetails = {
+            // For new sales
+            let newSalePaymentDetails = {
                 method: 'Cash',
                 amount: 0,
                 additionalFields: {}
             };
 
+            // For pending sale completion
+            let pendingSalePaymentDetails = {
+                method: 'Cash',
+                amount: 0,
+                additionalFields: {}
+            };
+
+            // Add a flag to track which flow we're in
+            let isCompletingPendingSale = false;
+
+            // Helper function to get current payment details
+            function getCurrentPaymentDetails() {
+                return isCompletingPendingSale ? pendingSalePaymentDetails : newSalePaymentDetails;
+            }
+
+            // Helper function to set current payment details
+            function setCurrentPaymentDetails(details) {
+                if (isCompletingPendingSale) {
+                    pendingSalePaymentDetails = {
+                        ...pendingSalePaymentDetails,
+                        ...details
+                    };
+                } else {
+                    newSalePaymentDetails = {
+                        ...newSalePaymentDetails,
+                        ...details
+                    };
+                }
+            }
+
             // Set total amount from the page
-            function setTotalAmount() {
+            function setTotalAmountForNewSale() {
                 const totalElement = document.getElementById('total');
                 const totalText = totalElement.textContent;
                 const totalAmount = parseFloat(totalText.replace(/[^\d.-]/g, ''));
 
-                paymentDetails.amount = totalAmount;
-
-                // Set amount in all payment modals
-                document.getElementById('cashAmountDue').textContent = '₵' + totalAmount.toFixed(2);
-                document.getElementById('mobileMoneyAmountDue').textContent = '₵' + totalAmount.toFixed(2);
-                document.getElementById('posAmountDue').textContent = '₵' + totalAmount.toFixed(2);
-                document.getElementById('bankTransferAmountDue').textContent = '₵' + totalAmount.toFixed(2);
+                newSalePaymentDetails.amount = totalAmount;
+                updateAmountDisplays(totalAmount);
             }
 
             // Set up payment option selection
@@ -986,7 +1303,9 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     // Update hidden input with payment method
                     const paymentMethod = this.getAttribute('data-payment');
                     selectedPaymentInput.value = paymentMethod;
-                    paymentDetails.method = paymentMethod;
+                    setCurrentPaymentDetails({
+                        method: paymentMethod
+                    });
                 });
             });
 
@@ -996,7 +1315,9 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                 defaultPaymentOption.classList.add('selected');
                 defaultPaymentOption.querySelector('.d-flex').classList.add('border-primary');
                 defaultPaymentOption.querySelector('.d-flex').classList.remove('border');
-                paymentDetails.method = 'Cash';
+                setCurrentPaymentDetails({
+                    method: 'Cash'
+                });
             }
 
             // Override original form submission
@@ -1017,8 +1338,12 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                         return;
                     }
 
+                    // Set flag for new sale
+                    isCompletingPendingSale = false;
+                    window.pendingSaleId = null;
+
                     // Update the total amount
-                    setTotalAmount();
+                    setTotalAmountForNewSale();
 
                     // Show payment modal instead of submitting form
                     paymentMethodModal.show();
@@ -1056,7 +1381,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     salesForm.appendChild(methodInput);
 
                     // Create a unique reference for the pending sale
-                    const uniqueId = "PENDING-" + Date.now().toString();
+                    const uniqueId = "PND-" + Date.now().toString();
                     const referenceInput = document.createElement('input');
                     referenceInput.type = 'hidden';
                     referenceInput.name = 'payment_reference';
@@ -1088,18 +1413,21 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                 cashChangeInput.value = change >= 0 ? change.toFixed(2) : '0.00';
                 completeCashPaymentButton.disabled = cashReceived < amountDue;
 
-                // Store in payment details
-                paymentDetails.additionalFields = {
-                    cashReceived: cashReceived.toFixed(2),
-                    change: change >= 0 ? change.toFixed(2) : '0.00'
-                };
+                // Store in payment details for current context
+                setCurrentPaymentDetails({
+                    additionalFields: {
+                        cashReceived: cashReceived.toFixed(2),
+                        change: change >= 0 ? change.toFixed(2) : '0.00'
+                    }
+                });
             });
 
             // Continue button shows appropriate payment detail screen
             continueButton.addEventListener('click', function() {
                 paymentMethodModal.hide();
 
-                switch (paymentDetails.method) {
+                const currentDetails = getCurrentPaymentDetails();
+                switch (currentDetails.method) {
                     case 'Cash':
                         cashPaymentModal.show();
                         break;
@@ -1118,7 +1446,16 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
             // Complete Cash Payment
             document.getElementById('completeCashPayment').addEventListener('click', function() {
                 cashPaymentModal.hide();
-                showPaymentSuccess();
+
+                if (window.pendingSaleId) {
+                    // Complete pending sale
+                    completePendingSale();
+                } else {
+                    // New sale
+                    showPaymentSuccess();
+                }
+
+                // showPaymentSuccess();
             });
 
             // Complete Mobile Money Payment
@@ -1132,14 +1469,23 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     return;
                 }
 
-                paymentDetails.additionalFields = {
-                    provider: provider,
-                    phoneNumber: phoneNumber,
-                    reference: reference
-                };
+                setCurrentPaymentDetails({
+                    additionalFields: {
+                        provider: provider,
+                        phoneNumber: phoneNumber,
+                        reference: reference
+                    }
+                });
 
                 mobileMoneyModal.hide();
-                showPaymentSuccess();
+
+                if (window.pendingSaleId) {
+                    completePendingSale();
+                } else {
+                    showPaymentSuccess();
+                }
+
+                // showPaymentSuccess();
             });
 
             // Complete PoS Payment
@@ -1152,13 +1498,22 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     return;
                 }
 
-                paymentDetails.additionalFields = {
-                    cardType: cardType,
-                    reference: reference
-                };
+                setCurrentPaymentDetails({
+                    additionalFields: {
+                        cardType: cardType,
+                        reference: reference
+                    }
+                });
 
                 posPaymentModal.hide();
-                showPaymentSuccess();
+
+                if (window.pendingSaleId) {
+                    completePendingSale();
+                } else {
+                    showPaymentSuccess();
+                }
+
+                // showPaymentSuccess();
             });
 
             // Complete Bank Transfer Payment
@@ -1172,47 +1527,69 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     return;
                 }
 
-                paymentDetails.additionalFields = {
-                    bankName: bankName,
-                    reference: reference,
-                    accountName: accountName
-                };
+                setCurrentPaymentDetails({
+                    additionalFields: {
+                        bankName: bankName,
+                        reference: reference,
+                        accountName: accountName
+                    }
+                });
 
                 bankTransferModal.hide();
-                showPaymentSuccess();
+
+                if (window.pendingSaleId) {
+                    completePendingSale();
+                } else {
+                    showPaymentSuccess();
+                }
+
+                // showPaymentSuccess();
             });
+
+            // New function to complete pending sales
+            function completePendingSale() {
+                // Set form values and submit
+                document.getElementById('processSaleId').value = window.pendingSaleId;
+                document.getElementById('processSaleAction').value = 'complete';
+                document.getElementById('processSaleForm').submit();
+
+                showPaymentSuccess();
+                // Clear the pending sale ID
+                window.pendingSaleId = null;
+            }
 
             // Show payment success and details
             function showPaymentSuccess() {
+                const currentDetails = getCurrentPaymentDetails();
                 const detailsContainer = document.getElementById('paymentDetails');
                 let detailsHTML = `
-      <p class="mb-2"><strong>Payment Method:</strong> ${paymentDetails.method}</p>
-      <p class="mb-2"><strong>Amount:</strong> ₵${paymentDetails.amount.toFixed(2)}</p>
-    `;
+                    <p class="mb-2"><strong>Payment Method:</strong> ${currentDetails.method}</p>
+                    <p class="mb-2"><strong>Amount:</strong> ₵${currentDetails.amount.toFixed(2)}</p>
+                `;
 
                 // Add additional fields based on payment method
-                if (paymentDetails.method === 'Cash') {
+                if (currentDetails.method === 'Cash') {
                     detailsHTML += `
-        <p class="mb-2"><strong>Cash Received:</strong> ₵${paymentDetails.additionalFields.cashReceived}</p>
-        <p class="mb-0"><strong>Change:</strong> ₵${paymentDetails.additionalFields.change}</p>
-      `;
-                } else if (paymentDetails.method === 'Mobile Money') {
+                        <p class="mb-2"><strong>Cash Received:</strong> ₵${currentDetails.additionalFields.cashReceived}</p>
+                        <p class="mb-0"><strong>Change:</strong> ₵${currentDetails.additionalFields.change}</p>
+                    `;
+                } else if (currentDetails.method === 'Mobile Money') {
                     detailsHTML += `
-        <p class="mb-2"><strong>Provider:</strong> ${paymentDetails.additionalFields.provider}</p>
-        <p class="mb-2"><strong>Phone Number:</strong> ${paymentDetails.additionalFields.phoneNumber}</p>
-        <p class="mb-0"><strong>Reference:</strong> ${paymentDetails.additionalFields.reference || 'N/A'}</p>
-      `;
-                } else if (paymentDetails.method === 'PoS') {
+                        <p class="mb-2"><strong>Provider:</strong> ${currentDetails.additionalFields.provider}</p>
+                        <p class="mb-2"><strong>Phone Number:</strong> ${currentDetails.additionalFields.phoneNumber}</p>
+                        <p class="mb-0"><strong>Reference:</strong> ${currentDetails.additionalFields.reference || 'N/A'}</p>
+                    `;
+                } else if (currentDetails.method === 'PoS') {
                     detailsHTML += `
-        <p class="mb-2"><strong>Card Type:</strong> ${paymentDetails.additionalFields.cardType}</p>
-        <p class="mb-0"><strong>Reference:</strong> ${paymentDetails.additionalFields.reference}</p>
-      `;
-                } else if (paymentDetails.method === 'Bank Transfer') {
+                        <p class="mb-2"><strong>Card Type:</strong> ${currentDetails.additionalFields.cardType}</p>
+                        <p class="mb-0"><strong>Reference:</strong> ${currentDetails.additionalFields.reference}</p>
+                    `;
+                } else if (currentDetails.method === 'Bank Transfer') {
                     detailsHTML += `
-        <p class="mb-2"><strong>Bank:</strong> ${paymentDetails.additionalFields.bankName}</p>
-        <p class="mb-2"><strong>Reference:</strong> ${paymentDetails.additionalFields.reference}</p>
-        <p class="mb-0"><strong>Account Name:</strong> ${paymentDetails.additionalFields.accountName || 'N/A'}</p>
-      `;
+                        <p class="mb-2"><strong>Bank:</strong> ${currentDetails.additionalFields.bankName}</p>
+                        <p class="mb-2"><strong>Reference:</strong> ${currentDetails.additionalFields.reference}</p>
+                        <p class="mb-0"><strong>Account Name:</strong> ${currentDetails.additionalFields.accountName || 'N/A'}</p>
+                    `;
                 }
 
                 detailsContainer.innerHTML = detailsHTML;
@@ -1236,9 +1613,10 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
 
                 // Add payment method to the form
                 const methodInput = document.createElement('input');
+                const currentDetails = getCurrentPaymentDetails();
                 methodInput.type = 'hidden';
                 methodInput.name = 'payment_method';
-                methodInput.value = paymentDetails.method;
+                methodInput.value = currentDetails.method;
                 salesForm.appendChild(methodInput);
 
                 // Generate a unique transaction ID
@@ -1272,13 +1650,181 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                 salesForm.appendChild(submitBtn);
 
                 // Log form data before submission (for debugging)
-                console.log("Submitting with payment method:", paymentDetails.method);
+                console.log("Submitting with payment method:", currentDetails.method);
                 console.log("Payment reference:", paymentReference);
 
                 // Submit the form
                 salesForm.submit();
             });
         });
+
+        // Handle View Pending button click
+        const viewPendingButton = document.querySelector('.btn-outline-secondary');
+        if (viewPendingButton && viewPendingButton.textContent.includes('View Pending')) {
+            viewPendingButton.addEventListener('click', function() {
+                const pendingSalesModal = new bootstrap.Modal(document.getElementById('pendingSalesModal'));
+                pendingSalesModal.show();
+            });
+        }
+
+        // Handle view details buttons in pending sales modal
+        document.addEventListener('click', function(event) {
+            if (event.target.closest('.view-details-btn')) {
+                const button = event.target.closest('.view-details-btn');
+                const saleId = button.getAttribute('data-sale-id');
+
+                // Fetch sale details via AJAX
+                fetch(`get_sale_details.php?id=${saleId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const sale = data.sale;
+
+                            let detailsHTML = `
+                                    <div class="mb-3">
+                                        <h6>Transaction: ${sale.transaction_number}</h6>
+                                        <p class="text-muted mb-2">${sale.formatted_date}</p>
+                                        <p><strong>Payment Method:</strong> ${sale.payment_method}</p>
+                                        <p><strong>Status:</strong> <span class="status-badge status-${sale.status.toLowerCase()}">${sale.status}</span></p>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h6>Items:</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Product</th>
+                                                        <th>Category</th>
+                                                        <th>Qty</th>
+                                                        <th>Price</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                `;
+
+                            sale.items.forEach(item => {
+                                detailsHTML += `
+                                                    <tr>
+                                                        <td>${item.product_name}</td>
+                                                        <td>${item.category || 'N/A'}</td>
+                                                        <td>${item.quantity}</td>
+                                                        <td>₵${parseFloat(item.unit_price).toFixed(2)}</td>
+                                                    </tr>
+                                `;
+                            });
+
+                            detailsHTML += `
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-4">
+                                            <p><strong>Subtotal:</strong> ₵${parseFloat(sale.amount).toFixed(2)}</p>
+                                        </div>
+                                        <div class="col-4">
+                                            <p><strong>Tax:</strong> ₵${parseFloat(sale.tax_amount).toFixed(2)}</p>
+                                        </div>
+                                        <div class="col-4">
+                                            <p><strong>Total:</strong> ₵${parseFloat(sale.total_amount).toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                            `;
+
+                            document.getElementById('saleDetailsContent').innerHTML = detailsHTML;
+                            const saleDetailsModal = new bootstrap.Modal(document.getElementById('saleDetailsModal'));
+                            saleDetailsModal.show();
+                        } else {
+                            alert('Error loading sale details: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error loading sale details');
+                    });
+            }
+        });
+
+        // Handle complete sale buttons - Updated version
+        document.addEventListener('click', function(event) {
+            if (event.target.closest('.complete-sale-btn')) {
+                const button = event.target.closest('.complete-sale-btn');
+                const saleId = button.getAttribute('data-sale-id');
+
+                // Set the flag for pending sale completion
+                isCompletingPendingSale = true;
+                window.pendingSaleId = saleId;
+
+                // Find the sale data from the pending sales
+                const saleRow = button.closest('tr');
+                const paymentMethodCell = saleRow.cells[4];
+                const amountCell = saleRow.cells[3];
+
+                const paymentMethod = paymentMethodCell.textContent.trim();
+                const totalAmount = parseFloat(amountCell.textContent.replace(/[^\d.-]/g, ''));
+
+                // Set pending sale payment details
+                pendingSalePaymentDetails = {
+                    method: paymentMethod,
+                    amount: totalAmount,
+                    additionalFields: {}
+                };
+
+                // Reset payment forms
+                resetPaymentForms();
+
+                // Update amount displays
+                updateAmountDisplays(totalAmount);
+
+                // Close pending sales modal first
+                const pendingSalesModal = bootstrap.Modal.getInstance(document.getElementById('pendingSalesModal'));
+                if (pendingSalesModal) {
+                    pendingSalesModal.hide();
+                }
+
+                // Show appropriate payment modal
+                showPaymentModalForMethod(paymentMethod);
+            }
+        });
+
+        // Handle cancel sale buttons
+        document.addEventListener('click', function(event) {
+            if (event.target.closest('.cancel-sale-btn')) {
+                const button = event.target.closest('.cancel-sale-btn');
+                const saleId = button.getAttribute('data-sale-id');
+
+                if (confirm('Are you sure you want to cancel this sale?')) {
+                    // Set form values and submit
+                    document.getElementById('processSaleId').value = saleId;
+                    document.getElementById('processSaleAction').value = 'cancel';
+                    document.getElementById('processSaleForm').submit();
+                }
+            }
+        });
+
+        // Function to reset payment form fields
+        function resetPaymentForms() {
+            // Reset cash form
+            document.getElementById('cashReceived').value = '';
+            document.getElementById('cashChange').value = '0.00';
+            document.getElementById('completeCashPayment').disabled = true;
+
+            // Reset mobile money form
+            document.getElementById('mobileMoneyProvider').value = '';
+            document.getElementById('mobileMoneyNumber').value = '';
+            document.getElementById('mobileMoneyReference').value = '';
+
+            // Reset PoS form
+            document.getElementById('cardType').value = '';
+            document.getElementById('posReference').value = '';
+
+            // Reset bank transfer form
+            document.getElementById('bankName').value = '';
+            document.getElementById('transferReference').value = '';
+            document.getElementById('accountName').value = '';
+        }
     </script>
 </body>
 
