@@ -61,7 +61,7 @@ include "../config/session_check.php";
                 </a>
                 <div class="submenu show" id="reports">
                     <a href="#" class="nav-link active"><i class="fas fa-file-export"></i> Generate Reports</a>
-                    <a href="#" class="nav-link"><i class="fas fa-file-import"></i> View Reports</a>
+                    <a href="../report/viewreport.php" class="nav-link"><i class="fas fa-file-import"></i> View Reports</a>
                 </div>
 
                 <!-- Settings -->
