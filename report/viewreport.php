@@ -449,7 +449,7 @@ if ($result) {
                         <h2>Monthly Sales Report</h2>
                         <p class="text-muted">Generated on: <?php echo date('F d, Y'); ?></p>
                     </div>
-                    <div class="col-md-4 text-md-end btn-group">
+                    <!-- <div class="col-md-4 text-md-end btn-group">
                         <button class="btn btn-outline-primary" onclick="printReport()">
                             <i class="fas fa-print me-2"></i>Print
                         </button>
@@ -462,7 +462,7 @@ if ($result) {
                         <button class="btn btn-outline-primary" onclick="shareReport()">
                             <i class="fas fa-share-alt me-2"></i>Share
                         </button>
-                    </div>
+                    </div> -->
                 </div>
 
                 <div class="col-md-6">
