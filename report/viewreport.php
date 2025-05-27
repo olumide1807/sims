@@ -401,14 +401,14 @@ if ($result) {
                 </div>
 
                 <!-- AI Insights -->
-                <a href="#" class="nav-link" onclick="toggleSubmenu('ai-insights')">
+                <!-- <a href="#" class="nav-link" onclick="toggleSubmenu('ai-insights')">
                     <i class="fas fa-robot"></i> AI-Powered Insights
                 </a>
                 <div class="submenu" id="ai-insights">
                     <a href="#" class="nav-link"><i class="fas fa-bell"></i> Reordering Suggestions</a>
                     <a href="#" class="nav-link"><i class="fas fa-clock"></i> Expiration Alerts</a>
                     <a href="#" class="nav-link"><i class="fas fa-chart-line"></i> Low-Demand Products</a>
-                </div>
+                </div> -->
 
                 <!-- Reports -->
                 <a href="#" class="nav-link active" onclick="toggleSubmenu('reports')">
@@ -424,16 +424,17 @@ if ($result) {
                     <i class="fas fa-cog"></i> Settings
                 </a>
                 <div class="submenu" id="settings">
-                    <a href="#" class="nav-link"><i class="fas fa-user"></i> User Profile</a>
-                    <a href="#" class="nav-link"><i class="fas fa-users-cog"></i> Manage Users</a>
-                    <a href="#" class="nav-link"><i class="fas fa-sliders-h"></i> System Settings</a>
-                    <a href="#" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
+                    <a href="../settings/manage_users.php" class="nav-link"><i class="fas fa-users"></i> User Management</a>
+                    <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
+                    <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
+                    <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
+                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
                 </div>
 
                 <!-- Help/Support -->
-                <a href="#" class="nav-link">
+                <!-- <a href="#" class="nav-link">
                     <i class="fas fa-question-circle"></i> Help/Support
-                </a>
+                </a> -->
 
                 <!-- Logout -->
                 <a href="../logout/" class="nav-link">
@@ -917,6 +918,36 @@ if ($result) {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
 
     <script>
+        function toggleSubmenu(id) {
+            const submenu = document.getElementById(id);
+            if (submenu) {
+                const allSubmenus = document.querySelectorAll('.submenu');
+                allSubmenus.forEach(menu => {
+                    if (menu !== submenu) {
+                        menu.classList.remove('show');
+                    }
+                });
+                submenu.classList.toggle('show');
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('show');
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const mobileToggle = document.querySelector('.mobile-menu-toggle');
+
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(event.target) && !mobileToggle.contains(event.target)) {
+                    sidebar.classList.remove('show');
+                }
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
             // Main tab navigation (Sales Summary, Inventory Reports, Charts)
             document.querySelectorAll('.nav-tabs .nav-link').forEach(button => {

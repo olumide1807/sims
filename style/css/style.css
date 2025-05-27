@@ -10,7 +10,7 @@
 
 :root {
     --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    --sidebar-width: 295px;
+    --sidebar-width: 310px;
 }
 
 body {
@@ -260,7 +260,7 @@ body {
 }
 
 .status-in-stock,
-.status-completed {
+.status-completed, .status-active {
     background-color: #dcfce7;
     color: #166534;
 }

@@ -320,10 +320,11 @@ try {
                     <i class="fas fa-cog"></i> Settings
                 </a>
                 <div class="submenu" id="settings">
-                    <a href="#" class="nav-link"><i class="fas fa-user"></i> User Profile</a>
-                    <a href="#" class="nav-link"><i class="fas fa-users-cog"></i> Manage Users</a>
-                    <a href="#" class="nav-link"><i class="fas fa-sliders-h"></i> System Settings</a>
-                    <a href="#" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
+                    <a href="../settings/manage_users.php" class="nav-link"><i class="fas fa-users"></i> User Management</a>
+                    <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
+                    <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
+                    <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
+                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
                 </div>
 
                 <!-- Logout -->
