@@ -1,7 +1,7 @@
 <?php
 session_start();
-include "../config/config.php";
-include "../config/session_check.php";
+include "../../config/config.php";
+include "../../config/session_check.php";
 
 // Default response structure
 $response = [

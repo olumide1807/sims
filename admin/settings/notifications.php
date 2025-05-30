@@ -1,8 +1,9 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
-include "../config/user_function.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
+include "../../config/user_function.php";
+include "../../config/notification_functions.php";
 
 // Check if user has admin privileges or notification management permissions
 // if (!isset($_SESSION['user_id']) || (!isAdmin($_SESSION['user_id'], $connect) && !hasPermission($_SESSION['user_id'], 'notification_management', $connect))) {
@@ -64,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (mysqli_stmt_execute($stmt)) {
                 // Log the activity
-                logUserActivity(
+                /* logUserActivity(
                     $_SESSION['user_id'],
                     'NOTIFICATION_SETTINGS_UPDATED',
                     'notification_settings',
@@ -78,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'notification_methods' => $notification_methods
                     ],
                     $connect
-                );
+                ); */
 
                 $message = "Notification settings updated successfully!";
             } else {
@@ -132,7 +133,9 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
     <title>Notification Settings - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../style/css/style.css">
+    <link rel="stylesheet" href="../../style/css/style.css">
+
+    <?php echo getNotificationDropdownCSS(); ?>
     <style>
         .notification-card {
             border: 1px solid #e9ecef;
@@ -257,7 +260,7 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
                 <div class="submenu" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -297,7 +300,7 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
                     <a href="#" class="nav-link active"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -306,7 +309,7 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -321,11 +324,11 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
                     <input type="text" placeholder="Search settings...">
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger"><?php echo $stats['low_stock_count'] + $stats['expiring_soon_count']; ?></span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -335,11 +338,6 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
                     <div class="col-md-8">
                         <h3>Notification Settings</h3>
                         <p class="mb-3">Configure your notification preferences and alert thresholds.</p>
-                    </div>
-                    <div class="col-md-4 text-md-end">
-                        <button class="btn btn-light rounded-pill px-4" onclick="testNotifications()">
-                            <i class="fas fa-vial me-2"></i>Test Notifications
-                        </button>
                     </div>
                 </div>
             </div>
@@ -512,6 +510,7 @@ $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stats_stmt));
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         function toggleSubmenu(id) {
             const submenu = document.getElementById(id);

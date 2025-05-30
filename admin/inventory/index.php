@@ -1,8 +1,9 @@
 <?php
 session_start();
 
-include "../config/config.php";
-include "../config/session_check.php";
+include "../../config/config.php";
+include "../../config/session_check.php";
+include "../../config/notification_functions.php";
 
 // Get the current page from the URL, defaulting to 1 if not set
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -114,6 +115,13 @@ if (mysqli_num_rows($res) > 0) {
         $cat[] = $row;
     }
 }
+
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -124,8 +132,9 @@ if (mysqli_num_rows($res) > 0) {
     <title>Inventory Management</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link href="../style/css/style.css" rel="stylesheet">
+    <link href="../../style/css/style.css" rel="stylesheet">
 
+    <?php echo getNotificationDropdownCSS(); ?>
     <style>
         .alert {
             position: fixed;
@@ -313,7 +322,7 @@ if (mysqli_num_rows($res) > 0) {
                 <div class="submenu show" id="inventory">
                     <a href="#" class="nav-link active"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -353,7 +362,7 @@ if (mysqli_num_rows($res) > 0) {
                     <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -362,7 +371,7 @@ if (mysqli_num_rows($res) > 0) {
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -377,11 +386,11 @@ if (mysqli_num_rows($res) > 0) {
                     <input type="text" placeholder="Search...">
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger">3</span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -811,7 +820,8 @@ if (mysqli_num_rows($res) > 0) {
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
-    <script src="../style/js/search.js"></script>
+    <script src="../../style/js/search.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         // Add category function
         function addCategory() {

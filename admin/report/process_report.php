@@ -1,7 +1,7 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
 
 // Error reporting for debugging (remove in production)
 error_reporting(E_ALL);

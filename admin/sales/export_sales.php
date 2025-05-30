@@ -1,8 +1,8 @@
 <?php
 // This file generates a downloadable CSV export of sales data
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
 
 // Get filter parameters
 $search = isset($_GET['search']) ? $_GET['search'] : '';

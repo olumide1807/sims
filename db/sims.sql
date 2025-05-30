@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 26, 2025 at 10:04 PM
+-- Generation Time: May 30, 2025 at 12:44 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -63,6 +63,31 @@ CREATE TABLE `login` (
 
 INSERT INTO `login` (`id`, `username`, `password`, `role`) VALUES
 (1, 'username', 'password', 'Administrator');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notification_settings`
+--
+
+CREATE TABLE `notification_settings` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `low_stock_alerts` tinyint(1) DEFAULT 1,
+  `expiry_notifications` tinyint(1) DEFAULT 1,
+  `low_stock_threshold` int(11) DEFAULT 10,
+  `expiry_threshold_days` int(11) DEFAULT 30,
+  `notification_methods` varchar(255) DEFAULT 'email,dashboard',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `notification_settings`
+--
+
+INSERT INTO `notification_settings` (`id`, `user_id`, `low_stock_alerts`, `expiry_notifications`, `low_stock_threshold`, `expiry_threshold_days`, `notification_methods`, `created_at`, `updated_at`) VALUES
+(1, 8, 1, 1, 30, 30, 'email', '2025-05-27 17:06:54', '2025-05-27 17:32:17');
 
 -- --------------------------------------------------------
 
@@ -275,6 +300,36 @@ INSERT INTO `reports` (`id`, `report_name`, `report_type`, `report_period_start`
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `report_settings`
+--
+
+CREATE TABLE `report_settings` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `default_date_range` varchar(50) DEFAULT 'last_7_days',
+  `auto_generation` tinyint(1) DEFAULT 0,
+  `auto_frequency` varchar(20) DEFAULT 'weekly',
+  `default_format` varchar(10) DEFAULT 'PDF',
+  `email_delivery` tinyint(1) DEFAULT 0,
+  `delivery_emails` text DEFAULT NULL,
+  `include_charts` tinyint(1) DEFAULT 1,
+  `include_summary` tinyint(1) DEFAULT 1,
+  `low_stock_threshold` int(11) DEFAULT 10,
+  `expiry_alert_days` int(11) DEFAULT 30,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `report_settings`
+--
+
+INSERT INTO `report_settings` (`id`, `user_id`, `default_date_range`, `auto_generation`, `auto_frequency`, `default_format`, `email_delivery`, `delivery_emails`, `include_charts`, `include_summary`, `low_stock_threshold`, `expiry_alert_days`, `created_at`, `updated_at`) VALUES
+(1, 8, 'last_30_days', 1, '0', 'CSV', 1, '0', 1, 1, 20, 30, '2025-05-29 14:28:33', '2025-05-29 14:29:45');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `sales`
 --
 
@@ -375,6 +430,34 @@ INSERT INTO `sale_details` (`id`, `sale_id`, `product_id`, `variant_id`, `quanti
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `system_preferences`
+--
+
+CREATE TABLE `system_preferences` (
+  `id` int(11) NOT NULL,
+  `setting_name` varchar(50) NOT NULL,
+  `setting_value` text NOT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `updated_by` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `system_preferences`
+--
+
+INSERT INTO `system_preferences` (`id`, `setting_name`, `setting_value`, `updated_at`, `updated_by`) VALUES
+(1, 'currency', 'NGN', '2025-05-30 10:34:58', 8),
+(2, 'currency_symbol', '₦', '2025-05-30 10:34:58', 8),
+(3, 'currency_position', 'before', '2025-05-30 10:34:58', 8),
+(4, 'timezone', 'UTC', '2025-05-30 10:34:58', 8),
+(5, 'date_format', 'Y-m-d', '2025-05-30 10:34:58', 8),
+(6, 'decimal_places', '2', '2025-05-30 10:34:58', 8),
+(7, 'thousand_separator', ',', '2025-05-30 10:34:58', 8),
+(8, 'decimal_separator', '.', '2025-05-30 10:34:58', 8);
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `users`
 --
 
@@ -387,16 +470,53 @@ CREATE TABLE `users` (
   `phone` varchar(100) NOT NULL,
   `password` varchar(100) NOT NULL,
   `role` varchar(100) NOT NULL,
-  `date_registered` datetime(6) NOT NULL
+  `date_registered` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`user_id`, `firstname`, `lastname`, `email`, `home_address`, `phone`, `password`, `role`, `date_registered`) VALUES
-(1, 'Gorden', 'Dabie', 'dabiegorden49@gmail.com', '14, olorunda street off bioyin', '07051927036', 'Qqy49XX*', 'manager', '2025-03-04 15:10:22.000000'),
-(2, 'Emmanuel', 'Ogu', 'emmanuelogu03@gmail.com', 'Catholic University', '0559380412', 'yy1S=3L0', 'sales rep', '2025-03-05 13:48:32.000000');
+INSERT INTO `users` (`user_id`, `firstname`, `lastname`, `email`, `home_address`, `phone`, `password`, `role`, `date_registered`, `updated_at`, `status`) VALUES
+(1, 'Gorden', 'Dabie', 'dabiegorden49@gmail.com', '14, olorunda street off bioyin', '07051927036', 'Qqy49XX*', 'sales_rep', '2025-03-04 15:10:22.000000', '2025-05-27 14:37:54.000000', 'active'),
+(2, 'Emmanuel', 'Ogu', 'emmanuelogu03@gmail.com', 'Catholic University', '0559380412', '$2y$10$uecGsh45B7I1G1oCHlECDuAd8kC8eSkze.F5m7cACy8APubBaxmdS', 'manager', '2025-03-05 13:48:32.000000', '2025-05-27 16:15:25.000000', 'active'),
+(8, 'Abdulbasit', 'Alaka-Yusuf', 'olumide1807@gmail.com', '14, olorunda street off bioyin', '07051927036', '$2y$10$inNVW8Kn16qIIKpRn25Ae.1qNnJb4HnsW7.SB1ec1C8QfNJLFO9qW', 'manager', '2025-05-27 14:43:47.000000', '2025-05-27 16:36:38.000000', 'active');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_permissions`
+--
+
+CREATE TABLE `user_permissions` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `permission` varchar(100) NOT NULL,
+  `granted` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `user_permissions`
+--
+
+INSERT INTO `user_permissions` (`id`, `user_id`, `permission`, `granted`, `created_at`) VALUES
+(13, 2, 'user_management', 1, '2025-05-27 14:36:07'),
+(14, 2, 'inventory_management', 1, '2025-05-27 14:36:07'),
+(15, 2, 'sales_management', 1, '2025-05-27 14:36:07'),
+(16, 2, 'reports_access', 1, '2025-05-27 14:36:07'),
+(17, 2, 'system_settings', 1, '2025-05-27 14:36:07'),
+(18, 2, 'audit_logs', 1, '2025-05-27 14:36:07'),
+(19, 1, 'inventory_view', 1, '2025-05-27 14:37:54'),
+(20, 1, 'sales_management', 1, '2025-05-27 14:37:54'),
+(23, 8, 'user_management', 1, '2025-05-27 15:45:12'),
+(24, 8, 'inventory_management', 1, '2025-05-27 15:45:12'),
+(25, 8, 'sales_management', 1, '2025-05-27 15:45:12'),
+(26, 8, 'reports_access', 1, '2025-05-27 15:45:12'),
+(27, 8, 'system_settings', 1, '2025-05-27 15:45:12'),
+(28, 8, 'audit_logs', 1, '2025-05-27 15:45:12');
 
 --
 -- Indexes for dumped tables
@@ -414,6 +534,13 @@ ALTER TABLE `category`
 --
 ALTER TABLE `login`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `notification_settings`
+--
+ALTER TABLE `notification_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `products`
@@ -439,6 +566,13 @@ ALTER TABLE `reports`
   ADD KEY `idx_period` (`report_period_start`,`report_period_end`);
 
 --
+-- Indexes for table `report_settings`
+--
+ALTER TABLE `report_settings`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`);
+
+--
 -- Indexes for table `sales`
 --
 ALTER TABLE `sales`
@@ -458,10 +592,25 @@ ALTER TABLE `sale_details`
   ADD KEY `fk_details_variant` (`variant_id`);
 
 --
+-- Indexes for table `system_preferences`
+--
+ALTER TABLE `system_preferences`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `setting_name` (`setting_name`),
+  ADD KEY `updated_by` (`updated_by`);
+
+--
 -- Indexes for table `users`
 --
 ALTER TABLE `users`
   ADD PRIMARY KEY (`user_id`);
+
+--
+-- Indexes for table `user_permissions`
+--
+ALTER TABLE `user_permissions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_user_permission` (`user_id`,`permission`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -478,6 +627,12 @@ ALTER TABLE `category`
 --
 ALTER TABLE `login`
   MODIFY `id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `notification_settings`
+--
+ALTER TABLE `notification_settings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `products`
@@ -498,6 +653,12 @@ ALTER TABLE `reports`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=68;
 
 --
+-- AUTO_INCREMENT for table `report_settings`
+--
+ALTER TABLE `report_settings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
 -- AUTO_INCREMENT for table `sales`
 --
 ALTER TABLE `sales`
@@ -510,14 +671,32 @@ ALTER TABLE `sale_details`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
 
 --
+-- AUTO_INCREMENT for table `system_preferences`
+--
+ALTER TABLE `system_preferences`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+
+--
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `user_id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `user_id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
+-- AUTO_INCREMENT for table `user_permissions`
+--
+ALTER TABLE `user_permissions`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `notification_settings`
+--
+ALTER TABLE `notification_settings`
+  ADD CONSTRAINT `notification_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `products`
@@ -538,6 +717,12 @@ ALTER TABLE `reports`
   ADD CONSTRAINT `reports_ibfk_1` FOREIGN KEY (`generated_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
 
 --
+-- Constraints for table `report_settings`
+--
+ALTER TABLE `report_settings`
+  ADD CONSTRAINT `report_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+
+--
 -- Constraints for table `sales`
 --
 ALTER TABLE `sales`
@@ -551,6 +736,18 @@ ALTER TABLE `sale_details`
   ADD CONSTRAINT `fk_details_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE NO ACTION ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_details_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_details_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `system_preferences`
+--
+ALTER TABLE `system_preferences`
+  ADD CONSTRAINT `system_preferences_ibfk_1` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`);
+
+--
+-- Constraints for table `user_permissions`
+--
+ALTER TABLE `user_permissions`
+  ADD CONSTRAINT `user_permissions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

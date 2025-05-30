@@ -1,8 +1,9 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
-include "../config/user_function.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
+include "../../config/user_function.php";
+include "../../config/notification_functions.php";
 
 // Check if user has admin privileges or settings management permissions
 /* if (!isset($_SESSION['user_id']) || (!isAdmin($_SESSION['user_id'], $connect) && !hasPermission($_SESSION['user_id'], 'settings_management', $connect))) {
@@ -66,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
                 
                 $stmt = mysqli_prepare($connect, $insert_query);
-                mysqli_stmt_bind_param($stmt, "isisissiiiii", 
+                mysqli_stmt_bind_param($stmt, "isisissiiii", 
                     $_SESSION['user_id'], $default_date_range, $auto_generation, $auto_frequency, 
                     $default_format, $email_delivery, $delivery_emails, $include_charts, 
                     $include_summary, $low_stock_threshold, $expiry_alert_days);
@@ -74,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (mysqli_stmt_execute($stmt)) {
                 // Log the activity
-                logUserActivity(
+                /* logUserActivity(
                     $_SESSION['user_id'],
                     'REPORT_SETTINGS_UPDATED',
                     'report_settings',
@@ -86,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'default_format' => $default_format
                     ],
                     $connect
-                );
+                ); */
 
                 $message = "Report settings updated successfully!";
             } else {
@@ -99,9 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch current settings
+$user_id = $_SESSION['user_id'];
 $settings_query = "SELECT * FROM report_settings WHERE user_id = ? LIMIT 1";
 $stmt = mysqli_prepare($connect, $settings_query);
-mysqli_stmt_bind_param($stmt, "i", $_SESSION['user_id']);
+mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
 $settings_result = mysqli_stmt_get_result($stmt);
 $current_settings = mysqli_fetch_assoc($settings_result);
@@ -132,7 +134,57 @@ if (!$current_settings) {
     <title>Report Settings - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../style/css/style.css">
+    <link rel="stylesheet" href="../../style/css/style.css">
+
+    <?php echo getNotificationDropdownCSS(); ?>
+
+        <style>
+        .icon-box {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+        }
+
+        .content-card {
+            transition: all 0.3s ease;
+        }
+
+        .content-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        #frequencySection, #emailSection {
+            transition: opacity 0.3s ease;
+        }
+
+        .input-group-text {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+
+        .form-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+
+        @media (max-width: 768px) {
+            .icon-box {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -164,7 +216,7 @@ if (!$current_settings) {
                 <div class="submenu" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -204,7 +256,7 @@ if (!$current_settings) {
                     <a href="notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="#" class="nav-link active"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -213,7 +265,7 @@ if (!$current_settings) {
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -223,16 +275,15 @@ if (!$current_settings) {
         <div class="main-content">
             <!-- Header -->
             <div class="header">
-                <div class="search-box">
-                    <i class="fas fa-search text-muted me-2"></i>
-                    <input type="text" placeholder="Search settings...">
+                <div>
+                    
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger">3</span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -447,6 +498,7 @@ if (!$current_settings) {
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         function toggleSubmenu(id) {
             const submenu = document.getElementById(id);
@@ -556,54 +608,6 @@ if (!$current_settings) {
             }
         });
     </script>
-
-    <style>
-        .icon-box {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-        }
-
-        .form-check-input:checked {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-
-        .content-card {
-            transition: all 0.3s ease;
-        }
-
-        .content-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        #frequencySection, #emailSection {
-            transition: opacity 0.3s ease;
-        }
-
-        .input-group-text {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-        }
-
-        .form-text {
-            font-size: 0.875rem;
-            color: #6c757d;
-        }
-
-        @media (max-width: 768px) {
-            .icon-box {
-                width: 40px;
-                height: 40px;
-                font-size: 1rem;
-            }
-        }
-    </style>
 </body>
 
 </html>

@@ -1,8 +1,9 @@
 <?php
 session_start();
 
-include "../config/config.php";
-include "../config/session_check.php";
+include "../../config/config.php";
+include "../../config/session_check.php";
+include "../../config/notification_functions.php";
 
 $sel_qry = "SELECT * FROM category";
 $res = mysqli_query($connect, $sel_qry);
@@ -12,6 +13,13 @@ if (mysqli_num_rows($res) > 0) {
         $cat[] = $row;
     }
 }
+
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
 
 if (isset($_POST['saveProduct'])) {
     $product_name   = isset($_POST['product_name']) ? mysqli_real_escape_string($connect, $_POST['product_name']) : '';
@@ -78,7 +86,9 @@ if (isset($_POST['saveProduct'])) {
     <title>Add Product - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link href="../style/css/style.css" rel="stylesheet">
+    <link href="../../style/css/style.css" rel="stylesheet">
+
+    <?php echo getNotificationDropdownCSS(); ?>
 
     <style>
         .alert {
@@ -146,7 +156,7 @@ if (isset($_POST['saveProduct'])) {
                 <div class="submenu show" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="#" class="nav-link active"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -186,7 +196,7 @@ if (isset($_POST['saveProduct'])) {
                     <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -195,7 +205,7 @@ if (isset($_POST['saveProduct'])) {
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -210,11 +220,11 @@ if (isset($_POST['saveProduct'])) {
                     <input type="text" placeholder="Search...">
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger">3</span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -376,6 +386,7 @@ if (isset($_POST['saveProduct'])) {
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         // Toggle sidebar submenu
         function toggleSubmenu(id) {

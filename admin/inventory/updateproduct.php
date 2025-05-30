@@ -1,8 +1,8 @@
 <?php
 session_start();
 
-include "../config/session_check.php";
-include "../config/config.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
 
 // Get the current page from the URL, defaulting to 1 if not set
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -66,7 +66,7 @@ if (mysqli_num_rows($res) > 0) {
     <title>Update Inventory - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link href="../style/css/style.css" rel="stylesheet">
+    <link href="../../style/css/style.css" rel="stylesheet">
     <style>
         .variant-row td {
             padding-left: 2rem;
@@ -238,7 +238,7 @@ if (mysqli_num_rows($res) > 0) {
                     <a href="#" class="nav-link"><i class="fas fa-user"></i> User Profile</a>
                     <a href="#" class="nav-link"><i class="fas fa-users-cog"></i> Manage Users</a>
                     <a href="#" class="nav-link"><i class="fas fa-sliders-h"></i> System Settings</a>
-                    <a href="#" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
+                    <!-- <a href="#" class="nav-link"><i class="fas fa-bell"></i> Notifications</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -247,7 +247,7 @@ if (mysqli_num_rows($res) > 0) {
                 </a>
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>

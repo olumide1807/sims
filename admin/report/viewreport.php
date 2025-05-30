@@ -1,7 +1,18 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php"; // Include your database connection
+include "../../config/session_check.php";
+include "../../config/config.php";
+include "../../config/notification_functions.php";
+
+$message = '';
+$error = '';
+
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
 
 // Get date range for filtering (default to current month)
 $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-01');
@@ -356,7 +367,9 @@ if ($result) {
     <title>View Report - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../style/css/style.css">
+    <link rel="stylesheet" href="../../style/css/style.css">
+
+    <?php echo getNotificationDropdownCSS(); ?>
 </head>
 
 <body>
@@ -388,7 +401,7 @@ if ($result) {
                 <div class="submenu" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -428,7 +441,7 @@ if ($result) {
                     <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -437,13 +450,28 @@ if ($result) {
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
         </div>
 
         <div class="main-content">
+
+            <div class="header">
+                <div>
+                    <!-- <i class="fas fa-search text-muted me-2"></i>
+                    <input type="text" placeholder="Search..."> -->
+                </div>
+                <div class="user-section">
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
+                    </div>
+                </div>
+            </div>
+
             <div class="content-card">
                 <div class="row align-items-center">
                     <div class="col-md-8">
@@ -916,7 +944,7 @@ if ($result) {
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
-
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         function toggleSubmenu(id) {
             const submenu = document.getElementById(id);

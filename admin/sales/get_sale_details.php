@@ -1,8 +1,8 @@
 <?php
 // This file fetches sale details for the modal view
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
 
 // Check if sale ID is provided
 if (!isset($_GET['id']) || empty($_GET['id'])) {

@@ -3,8 +3,8 @@
 header('Content-Type: application/json');
 
 session_start();
-include "../config/config.php";
-include "../config/session_check.php";
+include "../../config/config.php";
+include "../../config/session_check.php";
 
 $response = ['success' => false, 'message' => ''];
 

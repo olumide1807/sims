@@ -265,7 +265,7 @@ function isEmailAvailable($email, $user_id = null, $connect) {
     $query = "SELECT COUNT(*) as count FROM users WHERE email = ?";
     
     if ($user_id) {
-        $query .= " AND id != ?";
+        $query .= " AND user_id != ?";
         $stmt = mysqli_prepare($connect, $query);
         mysqli_stmt_bind_param($stmt, "si", $email, $user_id);
     } else {

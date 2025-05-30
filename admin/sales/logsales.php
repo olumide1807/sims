@@ -1,8 +1,9 @@
 <?php
 session_start();
 
-include "../config/config.php";
-include "../config/session_check.php";
+include "../../config/config.php";
+include "../../config/session_check.php";
+include "../../config/notification_functions.php";
 
 // Initialize variables
 $products = [];
@@ -357,6 +358,16 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
         $success_message = "Sale has been canceled!";
     }
 }
+
+$message = '';
+$error = '';
+
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -367,7 +378,9 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
     <title>Log Sale - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../style/css/style.css">
+    <link rel="stylesheet" href="../../style/css/style.css">
+
+    <?php echo getNotificationDropdownCSS(); ?>
 </head>
 
 <body>
@@ -399,7 +412,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                 <div class="submenu" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -439,7 +452,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                     <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -448,7 +461,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -456,7 +469,21 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
 
         <!-- Main Content -->
         <div class="main-content">
-            <!-- Header -->
+
+            <div class="header">
+                <div>
+                    <!-- <i class="fas fa-search text-muted me-2"></i>
+                    <input type="text" placeholder="Search..."> -->
+                </div>
+                <div class="user-section">
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
+                    </div>
+                </div>
+            </div>
+
             <div class="header">
                 <h4 class="mb-0">Log New Sale</h4>
                 <div class="d-flex gap-3">
@@ -955,6 +982,7 @@ if (isset($_GET['success']) && $_GET['success'] == '1') {
     </form>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         // Store products data with variants from PHP to JavaScript
         const productsData = <?php echo json_encode($products); ?>;

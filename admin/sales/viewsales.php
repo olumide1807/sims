@@ -1,9 +1,9 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php"; // Make sure you have this file for database connection
+include "../../config/session_check.php";
+include "../../config/config.php"; 
+include "../../config/notification_functions.php";
 
-// Query to fetch sales data
 $query = "SELECT 
             s.id,
             s.transaction_number, 
@@ -29,6 +29,16 @@ $result = mysqli_query($connect, $query);
 // Get unique categories for the filter
 $categoryQuery = "SELECT DISTINCT category FROM products";
 $categoryResult = mysqli_query($connect, $categoryQuery);
+
+$message = '';
+$error = '';
+
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -39,7 +49,9 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
     <title>Inventory Management</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link href="../style/css/style.css" rel="stylesheet">
+    <link href="../../style/css/style.css" rel="stylesheet">
+
+    <?php echo getNotificationDropdownCSS(); ?>
 </head>
 
 <body>
@@ -71,7 +83,7 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
                 <div class="submenu" id="inventory">
                     <a href="#" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -111,7 +123,7 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
                     <a href="../settings/notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="../settings/reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="../settings/system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="../settings/inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -120,7 +132,7 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -130,16 +142,16 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
         <div class="main-content">
             <!-- Header Section -->
             <div class="header">
-                <div class="search-box">
-                    <i class="fas fa-search text-muted me-2"></i>
-                    <input type="text" placeholder="Search...">
+                <div>
+                    <!-- <i class="fas fa-search text-muted me-2"></i>
+                    <input type="text" placeholder="Search..."> -->
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger">3</span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -285,6 +297,7 @@ $categoryResult = mysqli_query($connect, $categoryQuery);
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('searchInput');

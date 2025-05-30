@@ -1,15 +1,16 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
-include "../config/user_function.php";
-include "../phpmail.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
+include "../../config/user_function.php";
+include "../../phpmail.php";
+include "../../config/notification_functions.php";
 
 // Check if user has admin privileges or user management permissions
-if (!isset($_SESSION['user_id']) || (!isAdmin($_SESSION['user_id'], $connect) && !hasPermission($_SESSION['user_id'], 'user_management', $connect))) {
+/* if (!isset($_SESSION['user_id']) || (!isAdmin($_SESSION['user_id'], $connect) && !hasPermission($_SESSION['user_id'], 'user_management', $connect))) {
     header("Location: ../dashboard/");
     exit();
-}
+} */
 
 // Handle user operations
 $message = '';
@@ -73,22 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $result = sendEmail($recipient, $subject, $body, $headers);
                         echo $result;
                         echo "<script> alert('An Email has been sent to " . $recipient . ". Kindly check for Login Details');
-                                window.location.href = '../';
+                                window.location.href = 'manage_users.php';
                         </script>";
 
                         // Assign default permissions based on role
                         assignDefaultPermissions($new_user_id, $role, $connect);
-
-                        // Log the activity
-                        /* logUserActivity(
-                            $_SESSION['user_id'],
-                            'USER_CREATED',
-                            'users',
-                            $new_user_id,
-                            null,
-                            ['firstname' => $firstname, 'lastname' => $lastname, 'email' => $email, 'username' => $username, 'role' => $role],
-                            $connect
-                        ); */
 
                         $message = "User added successfully!";
                     } else {
@@ -105,8 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $role = sanitizeInput($_POST['role']);
                 $status = isset($_POST['status']) ? 'active' : 'inactive';
 
-                // Get old values for audit log
-                $old_query = "SELECT * FROM users WHERE id = ?";
+                // Get old values for audit log - Fixed column name consistency
+                $old_query = "SELECT * FROM users WHERE user_id = ?";
                 $stmt = mysqli_prepare($connect, $old_query);
                 mysqli_stmt_bind_param($stmt, "i", $user_id);
                 mysqli_stmt_execute($stmt);
@@ -118,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!isEmailAvailable($email, $user_id, $connect)) {
                     $error = "Email already exists!";
                 } else {
-                    $stmt = mysqli_prepare($connect, "UPDATE users SET firstname = ?, lastname = ?, email = ?, role = ?, status = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt = mysqli_prepare($connect, "UPDATE users SET firstname = ?, lastname = ?, email = ?, role = ?, status = ?, updated_at = NOW() WHERE user_id = ?");
                     mysqli_stmt_bind_param($stmt, "sssssi", $firstname, $lastname, $email, $role, $status, $user_id);
 
                     if (mysqli_stmt_execute($stmt)) {
@@ -128,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         // Log the activity
-                        logUserActivity(
+                        /* logUserActivity(
                             $_SESSION['user_id'],
                             'USER_UPDATED',
                             'users',
@@ -136,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ['firstname' => $old_user['firstname'], 'lastname' => $old_user['lastname'], 'email' => $old_user['email'], 'role' => $old_user['role'], 'status' => $old_user['status']],
                             ['firstname' => $firstname, 'lastname' => $lastname, 'email' => $email, 'role' => $role, 'status' => $status],
                             $connect
-                        );
+                        ); */
 
                         $message = "User updated successfully!";
                     } else {
@@ -163,9 +153,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_stmt_bind_param($stmt, "i", $user_id);
 
                     if (mysqli_stmt_execute($stmt)) {
-                        // Log the activity
-                        // logUserActivity($_SESSION['user_id'], 'USER_DELETED', 'users', $user_id, $user_data, null, $connect);
-
                         $message = "User deleted successfully!";
                     } else {
                         $error = "Error deleting user: " . mysqli_error($connect);
@@ -175,45 +162,126 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             case 'change_password':
                 $user_id = (int)$_POST['user_id'];
+                $current_password = $_POST['current_password'];
                 $new_password = $_POST['new_password'];
                 $confirm_password = $_POST['confirm_password'];
 
-                if ($new_password !== $confirm_password) {
-                    $error = "Passwords do not match!";
-                } elseif (!isStrongPassword($new_password)) {
-                    $error = "Password must be at least 8 characters with uppercase, lowercase, and number!";
-                } else {
-                    $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                // Check if user is trying to change their own password
+                if ($user_id == $_SESSION['user_id']) {
+                    // First, verify current password
+                    $stmt = mysqli_prepare($connect, "SELECT password FROM users WHERE user_id = ?");
+                    mysqli_stmt_bind_param($stmt, "i", $user_id);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+                    $user_data = mysqli_fetch_assoc($result);
 
-                    $stmt = mysqli_prepare($connect, "UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?");
+                    if (!$user_data || !password_verify($current_password, $user_data['password'])) {
+                        $error = "Current password is incorrect!";
+                    } elseif ($new_password !== $confirm_password) {
+                        $error = "New passwords do not match!";
+                    } elseif (!isStrongPassword($new_password)) {
+                        $error = "Password must be at least 8 characters with uppercase, lowercase, and number!";
+                    } elseif ($current_password === $new_password) {
+                        $error = "New password must be different from current password!";
+                    } else {
+                        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+
+                        $stmt = mysqli_prepare($connect, "UPDATE users SET password = ?, updated_at = NOW() WHERE user_id = ?");
+                        mysqli_stmt_bind_param($stmt, "si", $hashed_password, $user_id);
+
+                        if (mysqli_stmt_execute($stmt)) {
+                            // Log the activity
+                            // logUserActivity($_SESSION['user_id'], 'PASSWORD_CHANGED', 'users', $user_id, null, null, $connect);
+                            $message = "Your password has been changed successfully!";
+                        } else {
+                            $error = "Error changing password: " . mysqli_error($connect);
+                        }
+                    }
+                } else {
+                    $error = "You can only change your own password!";
+                }
+                break;
+
+            case 'request_password_reset':
+                $user_id = (int)$_POST['user_id'];
+
+                // Get user data
+                $user_query = "SELECT firstname, lastname, email FROM users WHERE user_id = ?";
+                $stmt = mysqli_prepare($connect, $user_query);
+                mysqli_stmt_bind_param($stmt, "i", $user_id);
+                mysqli_stmt_execute($stmt);
+                $user_data = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+                if ($user_data) {
+                    // Generate new temporary password
+                    function generateStrongPassword($length = 8)
+                    {
+                        $upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                        $lower = "abcdefghijklmnopqrstuvwxyz";
+                        $numbers = "0123456789";
+                        $symbols = "!@#$%^&*()-_=+";
+
+                        $all = $upper . $lower . $numbers . $symbols;
+                        $password = $upper[rand(0, strlen($upper) - 1)] .
+                            $lower[rand(0, strlen($lower) - 1)] .
+                            $numbers[rand(0, strlen($numbers) - 1)] .
+                            $symbols[rand(0, strlen($symbols) - 1)];
+
+                        for ($i = 4; $i < $length; $i++) {
+                            $password .= $all[rand(0, strlen($all) - 1)];
+                        }
+
+                        return str_shuffle($password);
+                    }
+
+                    $temp_password = generateStrongPassword(8);
+                    $hashed_password = password_hash($temp_password, PASSWORD_DEFAULT);
+
+                    // Update user password
+                    $stmt = mysqli_prepare($connect, "UPDATE users SET password = ?, updated_at = NOW() WHERE user_id = ?");
                     mysqli_stmt_bind_param($stmt, "si", $hashed_password, $user_id);
 
                     if (mysqli_stmt_execute($stmt)) {
-                        // Log the activity
-                        logUserActivity($_SESSION['user_id'], 'PASSWORD_CHANGED', 'users', $user_id, null, null, $connect);
+                        // Send email with new password
+                        $recipient = $user_data['email'];
+                        $subject = "Password Reset - SIMS";
+                        $body = "Hello " . $user_data['firstname'] . " " . $user_data['lastname'] . ",\n\n";
+                        $body .= "Your password has been reset by an administrator.\n";
+                        $body .= "Your new temporary password is: {$temp_password}\n\n";
+                        $body .= "Please login and change your password immediately.\n\n";
+                        $body .= "Thank you.";
+                        $headers = "From: olumide@gmail.com\r\n";
 
-                        $message = "Password changed successfully!";
+                        // Send email
+                        $result = sendEmail($recipient, $subject, $body, $headers);
+
+                        echo "<script>
+                            alert('Password reset email has been sent to " . $recipient . "');
+                            window.location.href = 'manage_users.php';
+                        </script>";
+
+                        $message = "Password reset email sent successfully!";
                     } else {
-                        $error = "Error changing password: " . mysqli_error($connect);
+                        $error = "Error resetting password: " . mysqli_error($connect);
                     }
+                } else {
+                    $error = "User not found!";
                 }
                 break;
         }
     }
 }
 
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
+
 // Fetch all users
 $users_query = "SELECT * FROM users ORDER BY date_registered DESC";
 $users_result = mysqli_query($connect, $users_query);
-
-// Get user for editing if requested
-$edit_user = null;
-if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
-    $edit_id = (int)$_GET['edit'];
-    $edit_query = "SELECT * FROM users WHERE id = $edit_id";
-    $edit_result = mysqli_query($connect, $edit_query);
-    $edit_user = mysqli_fetch_assoc($edit_result);
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -224,7 +292,9 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     <title>User Management - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../style/css/style.css">
+    <link rel="stylesheet" href="../../style/css/style.css">
+
+    <?php echo getNotificationDropdownCSS(); ?>
 </head>
 
 <body>
@@ -256,7 +326,7 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                 <div class="submenu" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -267,16 +337,6 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                     <a href="../sales/logsales.php" class="nav-link"><i class="fas fa-cash-register"></i> Log Sale</a>
                     <a href="../sales/viewsales.php" class="nav-link"><i class="fas fa-chart-bar"></i> View Sales</a>
                 </div>
-
-                <!-- AI Insights -->
-                <!-- <a href="#" class="nav-link" onclick="toggleSubmenu('ai-insights')">
-                    <i class="fas fa-robot"></i> AI-Powered Insights
-                </a>
-                <div class="submenu" id="ai-insights">
-                    <a href="#" class="nav-link"><i class="fas fa-bell"></i> Reordering Suggestions</a>
-                    <a href="#" class="nav-link"><i class="fas fa-clock"></i> Expiration Alerts</a>
-                    <a href="#" class="nav-link"><i class="fas fa-chart-line"></i> Low-Demand Products</a>
-                </div> -->
 
                 <!-- Reports -->
                 <a href="#" class="nav-link" onclick="toggleSubmenu('reports')">
@@ -296,16 +356,11 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                     <a href="notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="system_preferences.php" class="nav-link"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
-                <!-- Help/Support -->
-                <!-- <a href="#" class="nav-link">
-                    <i class="fas fa-question-circle"></i> Help/Support
-                </a> -->
-
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -315,16 +370,16 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
         <div class="main-content">
             <!-- Header -->
             <div class="header">
-                <div class="search-box">
-                    <i class="fas fa-search text-muted me-2"></i>
-                    <input type="text" placeholder="Search users...">
+                <div>
+                    <!-- <i class="fas fa-search text-muted me-2"></i>
+                    <input type="text" placeholder="Search..."> -->
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger">3</span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -411,13 +466,24 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                                     <td><?php echo date('M d, Y', strtotime($user['date_registered'])); ?></td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <a href="?edit=<?php echo $user['user_id']; ?>" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editUserModal">
+                                            <button class="btn btn-outline-primary" onclick="editUser(<?php echo $user['user_id']; ?>)">
                                                 <i class="fas fa-edit"></i>
-                                            </a>
-                                            <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#changePasswordModal"
-                                                onclick="setPasswordUserId(<?php echo $user['user_id']; ?>)">
-                                                <i class="fas fa-key"></i>
                                             </button>
+
+                                            <?php if ($user['user_id'] == $_SESSION['user_id']): ?>
+                                                <!-- Current user can change their own password -->
+                                                <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#changePasswordModal"
+                                                    onclick="setPasswordUserId(<?php echo $user['user_id']; ?>)">
+                                                    <i class="fas fa-key"></i>
+                                                </button>
+                                            <?php else: ?>
+                                                <!-- For other users, show password reset option -->
+                                                <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#resetPasswordModal"
+                                                    onclick="setResetUserId(<?php echo $user['user_id']; ?>, '<?php echo htmlspecialchars($user['firstname'] . ' ' . $user['lastname']); ?>')">
+                                                    <i class="fas fa-key"></i>
+                                                </button>
+                                            <?php endif; ?>
+
                                             <?php if ($user['user_id'] != $_SESSION['user_id']): ?>
                                                 <button class="btn btn-outline-danger" onclick="confirmDelete(<?php echo $user['user_id']; ?>, '<?php echo htmlspecialchars($user['firstname'] . ' ' . $user['lastname']); ?>')">
                                                     <i class="fas fa-trash"></i>
@@ -498,69 +564,64 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     </div>
 
     <!-- Edit User Modal -->
-    <?php if ($edit_user): ?>
-        <div class="modal fade show" id="editUserModal" tabindex="-1" style="display: block;">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Edit User</h5>
-                        <a href="user_management.php" class="btn-close"></a>
-                    </div>
-                    <form method="POST">
-                        <div class="modal-body">
-                            <input type="hidden" name="action" value="edit_user">
-                            <input type="hidden" name="user_id" value="<?php echo $edit_user['user_id']; ?>">
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">First Name</label>
-                                    <input type="text" class="form-control" name="firstname" value="<?php echo htmlspecialchars($edit_user['firstname']); ?>" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Last Name</label>
-                                    <input type="text" class="form-control" name="lastname" value="<?php echo htmlspecialchars($edit_user['lastname']); ?>" required>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input type="email" class="form-control" name="email" value="<?php echo htmlspecialchars($edit_user['email']); ?>" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Role</label>
-                                <select class="form-select" name="role" required>
-                                    <!-- <option value="admin" <?php echo $edit_user['role'] === 'admin' ? 'selected' : ''; ?>>Administrator</option> -->
-                                    <option value="manager" <?php echo $edit_user['role'] === 'manager' ? 'selected' : ''; ?>>Manager</option>
-                                    <!-- <option value="pharmacist" <?php echo $edit_user['role'] === 'pharmacist' ? 'selected' : ''; ?>>Pharmacist</option> -->
-                                    <option value="sales_rep" <?php echo $edit_user['role'] === 'sales_rep' ? 'selected' : ''; ?>>Sales Representative</option>
-                                </select>
-                            </div>
-
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="status" id="editStatusCheck" <?php echo $edit_user['status'] === 'active' ? 'checked' : ''; ?>>
-                                <label class="form-check-label" for="editStatusCheck">
-                                    Active User
-                                </label>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <a href="user_management.php" class="btn btn-secondary">Cancel</a>
-                            <button type="submit" class="btn btn-primary">Update User</button>
-                        </div>
-                    </form>
+    <div class="modal fade" id="editUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="edit_user">
+                        <input type="hidden" name="user_id" id="editUserId">
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">First Name</label>
+                                <input type="text" class="form-control" name="firstname" id="editFirstname" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control" name="lastname" id="editLastname" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" id="editEmail" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Role</label>
+                            <select class="form-select" name="role" id="editRole" required>
+                                <option value="manager">Manager</option>
+                                <option value="sales_rep">Sales Representative</option>
+                            </select>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="status" id="editStatusCheck">
+                            <label class="form-check-label" for="editStatusCheck">
+                                Active User
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Update User</button>
+                    </div>
+                </form>
             </div>
         </div>
-        <div class="modal-backdrop fade show"></div>
-    <?php endif; ?>
+    </div>
 
     <!-- Change Password Modal -->
     <div class="modal fade" id="changePasswordModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Change Password</h5>
+                    <h5 class="modal-title">Change My Password</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
@@ -569,13 +630,20 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                         <input type="hidden" name="user_id" id="passwordUserId">
 
                         <div class="mb-3">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" class="form-control" name="current_password" required>
+                            <small class="form-text text-muted">Enter your current password to verify your identity</small>
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label">New Password</label>
-                            <input type="password" class="form-control" name="new_password" required minlength="6">
+                            <input type="password" class="form-control" name="new_password" required minlength="8">
+                            <small class="form-text text-muted">At least 8 characters with uppercase, lowercase, and number</small>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-control" name="confirm_password" required minlength="6">
+                            <input type="password" class="form-control" name="confirm_password" required minlength="8">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -583,6 +651,33 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
                         <button type="submit" class="btn btn-primary">Change Password</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reset User Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        This will generate a new temporary password and send it to the user's email address.
+                    </div>
+                    <p>Are you sure you want to reset the password for:</p>
+                    <p class="text-primary"><strong id="resetUserName"></strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="action" value="request_password_reset">
+                        <input type="hidden" name="user_id" id="resetUserId">
+                        <button type="submit" class="btn btn-warning">Send Reset Email</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -612,7 +707,18 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
+        // Store users data for JavaScript access
+        const usersData = <?php
+                            mysqli_data_seek($users_result, 0); // Reset result pointer
+                            $users_array = [];
+                            while ($user = mysqli_fetch_assoc($users_result)) {
+                                $users_array[] = $user;
+                            }
+                            echo json_encode($users_array);
+                            ?>;
+
         function toggleSubmenu(id) {
             const submenu = document.getElementById(id);
             if (submenu) {
@@ -631,8 +737,33 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
             sidebar.classList.toggle('show');
         }
 
+        function setResetUserId(userId, userName) {
+            document.getElementById('resetUserId').value = userId;
+            document.getElementById('resetUserName').textContent = userName;
+        }
+
         function setPasswordUserId(userId) {
-            document.getElementById('passwordUserId').value = userId;
+            // Only allow if it's the current user
+            if (userId == <?php echo $_SESSION['user_id']; ?>) {
+                document.getElementById('passwordUserId').value = userId;
+            }
+        }
+
+        function editUser(userId) {
+            // Find user data
+            const user = usersData.find(u => u.user_id == userId);
+            if (user) {
+                // Populate form fields
+                document.getElementById('editUserId').value = user.user_id;
+                document.getElementById('editFirstname').value = user.firstname;
+                document.getElementById('editLastname').value = user.lastname;
+                document.getElementById('editEmail').value = user.email;
+                document.getElementById('editRole').value = user.role;
+                document.getElementById('editStatusCheck').checked = user.status === 'active';
+
+                // Show modal
+                new bootstrap.Modal(document.getElementById('editUserModal')).show();
+            }
         }
 
         function confirmDelete(userId, userName) {
@@ -646,13 +777,53 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
             const passwordForm = document.querySelector('#changePasswordModal form');
             if (passwordForm) {
                 passwordForm.addEventListener('submit', function(e) {
-                    const password = this.querySelector('input[name="new_password"]').value;
-                    const confirm = this.querySelector('input[name="confirm_password"]').value;
+                    const currentPassword = this.querySelector('input[name="current_password"]').value;
+                    const newPassword = this.querySelector('input[name="new_password"]').value;
+                    const confirmPassword = this.querySelector('input[name="confirm_password"]').value;
 
-                    if (password !== confirm) {
+                    // Check if current password is provided
+                    if (!currentPassword.trim()) {
                         e.preventDefault();
-                        alert('Passwords do not match!');
+                        alert('Please enter your current password!');
+                        return;
                     }
+
+                    // Check if new password matches confirmation
+                    if (newPassword !== confirmPassword) {
+                        e.preventDefault();
+                        alert('New passwords do not match!');
+                        return;
+                    }
+
+                    // Check if new password is different from current
+                    if (currentPassword === newPassword) {
+                        e.preventDefault();
+                        alert('New password must be different from current password!');
+                        return;
+                    }
+
+                    // Basic password strength check
+                    if (newPassword.length < 8) {
+                        e.preventDefault();
+                        alert('Password must be at least 8 characters long!');
+                        return;
+                    }
+
+                    const hasUpper = /[A-Z]/.test(newPassword);
+                    const hasLower = /[a-z]/.test(newPassword);
+                    const hasNumber = /\d/.test(newPassword);
+
+                    if (!hasUpper || !hasLower || !hasNumber) {
+                        e.preventDefault();
+                        alert('Password must contain at least one uppercase letter, one lowercase letter, and one number!');
+                        return;
+                    }
+                });
+
+                // Clear form when modal is closed
+                const modal = document.getElementById('changePasswordModal');
+                modal.addEventListener('hidden.bs.modal', function() {
+                    passwordForm.reset();
                 });
             }
         });

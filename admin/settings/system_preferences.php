@@ -1,8 +1,9 @@
 <?php
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
-include "../config/user_function.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
+include "../../config/user_function.php";
+include "../../config/notification_functions.php";
 
 /* // Check if user has admin privileges or system management permissions
 if (!isset($_SESSION['user_id']) || (!isAdmin($_SESSION['user_id'], $connect) && !hasPermission($_SESSION['user_id'], 'system_management', $connect))) {
@@ -71,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($success) {
                 // Log the activity
-                logUserActivity(
+                /* logUserActivity(
                     $_SESSION['user_id'],
                     'SYSTEM_PREFERENCES_UPDATED',
                     'system_preferences',
@@ -79,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     null,
                     $preferences,
                     $connect
-                );
+                ); */
 
                 $message = "System preferences updated successfully!";
             } else {
@@ -88,6 +89,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$user_id = $_SESSION['user_id'];
+
+// Get notification data
+$notification_count = getNotificationCount($user_id, $connect);
+$notifications = getUserNotifications($user_id, $connect, 5); // Get 5 latest notifications
+$notification_stats = getNotificationStats(getUserNotificationSettings($user_id, $connect), $connect);
 
 // Fetch current system preferences
 function getSystemPreference($setting_name, $default_value, $connect)
@@ -114,6 +122,7 @@ $current_decimal_separator = getSystemPreference('decimal_separator', '.', $conn
 
 // Currency options
 $currencies = [
+    'GHS' => ['name' => 'Ghana Cedis', 'symbol' => '₵'],
     'USD' => ['name' => 'US Dollar', 'symbol' => '$'],
     'EUR' => ['name' => 'Euro', 'symbol' => '€'],
     'GBP' => ['name' => 'British Pound', 'symbol' => '£'],
@@ -167,7 +176,9 @@ $date_formats = [
     <title>System Preferences - SIMS</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../style/css/style.css">
+    <link rel="stylesheet" href="../../style/css/style.css">
+
+    <?php echo getNotificationDropdownCSS(); ?>
 </head>
 
 <body>
@@ -199,7 +210,7 @@ $date_formats = [
                 <div class="submenu" id="inventory">
                     <a href="../inventory/" class="nav-link"><i class="fas fa-list"></i> View Inventory</a>
                     <a href="../inventory/addproduct.php" class="nav-link"><i class="fas fa-plus"></i> Add Product</a>
-                    <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a>
+                    <!-- <a href="../inventory/updateproduct.php" class="nav-link"><i class="fas fa-edit"></i> Update Inventory</a> -->
                 </div>
 
                 <!-- Sales Management -->
@@ -239,7 +250,7 @@ $date_formats = [
                     <a href="notifications.php" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
                     <a href="reports_settings.php" class="nav-link"><i class="fas fa-file-cog"></i> Report Settings</a>
                     <a href="#" class="nav-link active"><i class="fas fa-sliders-h"></i> System Preferences</a>
-                    <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a>
+                    <!-- <a href="inventory_settings.php" class="nav-link"><i class="fas fa-box-open"></i> Inventory Settings</a> -->
                 </div>
 
                 <!-- Help/Support -->
@@ -248,7 +259,7 @@ $date_formats = [
                 </a> -->
 
                 <!-- Logout -->
-                <a href="../logout/" class="nav-link">
+                <a href="../../logout/" class="nav-link">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </nav>
@@ -258,16 +269,16 @@ $date_formats = [
         <div class="main-content">
             <!-- Header -->
             <div class="header">
-                <div class="search-box">
-                    <i class="fas fa-search text-muted me-2"></i>
-                    <input type="text" placeholder="Search settings...">
+                <div>
+                    <!-- <i class="fas fa-search text-muted me-2"></i>
+                    <input type="text" placeholder="Search..."> -->
                 </div>
                 <div class="user-section">
-                    <div class="notification-badge">
-                        <i class="fas fa-bell text-muted"></i>
-                        <span class="badge rounded-pill bg-danger">3</span>
+                    <?php echo generateNotificationDropdown($user_id, $connect); ?>
+                    <div class="user-info ms-3">
+                        <span class="fw-bold"><?php echo htmlspecialchars($_SESSION['firstname']); ?></span>
+                        <small class="d-block text-muted"><?php echo htmlspecialchars(ucfirst($_SESSION['role'])); ?></small>
                     </div>
-                    <img src="/placeholder.svg?height=40&width=40" class="rounded-circle" alt="User avatar">
                 </div>
             </div>
 
@@ -471,6 +482,7 @@ $date_formats = [
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <?php echo getNotificationDropdownJS(); ?>
     <script>
         // Currency data for JavaScript
         const currencies = <?php echo json_encode($currencies); ?>;

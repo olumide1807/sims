@@ -1,8 +1,8 @@
 <?php
 // This file generates an invoice for a specific sale
 session_start();
-include "../config/session_check.php";
-include "../config/config.php";
+include "../../config/session_check.php";
+include "../../config/config.php";
 
 // Check if sale ID is provided
 if (!isset($_GET['id']) || empty($_GET['id'])) {
